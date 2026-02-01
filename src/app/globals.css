@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --tg-theme-bg-color: #17212b;
+  --tg-theme-text-color: #f5f5f5;
+  --tg-theme-hint-color: #6a7883;
+  --tg-theme-link-color: #5288c1;
+  --tg-theme-button-color: #5288c1;
+  --tg-theme-button-text-color: #ffffff;
+  --tg-theme-secondary-bg-color: #232e3c;
+}
+
+html,
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--tg-theme-bg-color, #17212b);
+  color: var(--tg-theme-text-color, #f5f5f5);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Telegram WebApp specific styles */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Custom scrollbar for chat */
+.chat-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Typing indicator animation */
+.typing-indicator span {
+  animation: typingDot 1.4s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingDot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* Message bubble styles */
+.bubble-npc {
+  background: linear-gradient(135deg, #182533 0%, #1d2a3a 100%);
+  border-radius: 4px 18px 18px 18px;
+}
+
+.bubble-me {
+  background: linear-gradient(135deg, #2b5278 0%, #3a6894 100%);
+  border-radius: 18px 4px 18px 18px;
+}
+
+.bubble-system {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Choice button styles */
+.choice-button {
+  background: linear-gradient(135deg, rgba(82, 136, 193, 0.2) 0%, rgba(82, 136, 193, 0.1) 100%);
+  border: 1px solid rgba(82, 136, 193, 0.4);
+  transition: all 0.2s ease;
+}
+
+.choice-button:hover {
+  background: linear-gradient(135deg, rgba(82, 136, 193, 0.3) 0%, rgba(82, 136, 193, 0.2) 100%);
+  border-color: rgba(82, 136, 193, 0.6);
+  transform: translateY(-2px);
+}
+
+.choice-button:active {
+  transform: translateY(0);
+}
+
+/* Background styles for different story moods */
+.bg-noir {
+  background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+}
+
+.bg-romance {
+  background: linear-gradient(180deg, #1a0a14 0%, #2d1b2e 50%, #1a1a2e 100%);
+}
+
+.bg-thriller {
+  background: linear-gradient(180deg, #0f0a0a 0%, #1a1515 50%, #0a0808 100%);
+}
+
+.bg-mystery {
+  background: linear-gradient(180deg, #0a0f14 0%, #1a2533 50%, #0f1a24 100%);
+}
+
+/* Pause screen styles */
+.pause-overlay {
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.9) 100%);
+  backdrop-filter: blur(4px);
+}
