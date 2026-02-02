@@ -9,23 +9,29 @@ import type { Story, Day, Scene, Choice, Snapshot, SnapshotData } from "@/lib/ty
 export async function getAllStories(): Promise<Story[]> {
   try {
     await requireAdmin();
-  } catch {
-    // Игнорируем ошибки авторизации для отладки
+  } catch (err) {
+    console.log("requireAdmin error (ignored):", err);
   }
   
-  const supabase = await createAdminSupabaseClient();
-  
-  const { data, error } = await supabase
-    .from("stories")
-    .select("*")
-    .order("created_at", { ascending: false });
+  try {
+    const supabase = await createAdminSupabaseClient();
+    
+    const { data, error } = await supabase
+      .from("stories")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("Error fetching all stories:", error);
+    if (error) {
+      console.error("Supabase error fetching stories:", error);
+      return [];
+    }
+    
+    console.log(`Loaded ${data?.length || 0} stories from DB`);
+    return (data || []) as Story[];
+  } catch (err) {
+    console.error("Exception in getAllStories:", err);
     return [];
   }
-  
-  return (data || []) as Story[];
 }
 
 export async function getStory(storyId: string): Promise<Story | null> {

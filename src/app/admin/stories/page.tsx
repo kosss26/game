@@ -2,7 +2,12 @@ import Link from "next/link";
 import { getAllStories } from "@/lib/actions/admin";
 
 export default async function StoriesListPage() {
-  const stories = await getAllStories();
+  let stories = [];
+  try {
+    stories = await getAllStories();
+  } catch (error) {
+    console.error("Error loading stories:", error);
+  }
 
   return (
     <div className="px-4 py-6">
