@@ -111,7 +111,12 @@ async function DayCard({ day, storyId, progress, previousCompleted }: DayCardPro
           </div>
         </div>
 
-        {canPlay ? (
+        {day.status !== "published" ? (
+          <div className="text-right">
+            <p className="text-xs text-yellow-400">День не опубликован</p>
+            <p className="text-xs text-tg-text-hint">Статус: {day.status}</p>
+          </div>
+        ) : canPlay ? (
           <Link
             href={`/play/${storyId}/${day.day_number}`}
             className="px-4 py-2 bg-tg-accent text-white text-sm font-medium rounded-xl active:scale-95 transition-transform"

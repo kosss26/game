@@ -40,11 +40,11 @@ export async function getStoryWithDays(storyId: string): Promise<StoryWithProgre
     return null;
   }
 
+  // Показываем все дни (не только published) - для админов и для отображения статуса
   const { data: days, error: daysError } = await supabase
     .from("days")
     .select("*")
     .eq("story_id", storyId)
-    .eq("status", "published")
     .order("day_number", { ascending: true });
 
   if (daysError) {
@@ -54,7 +54,7 @@ export async function getStoryWithDays(storyId: string): Promise<StoryWithProgre
 
   return {
     ...(story as Story),
-    days: days as Day[],
+    days: (days || []) as Day[],
   };
 }
 
