@@ -7,34 +7,39 @@ import type { Story, Day, Scene, Choice, Snapshot, SnapshotData } from "@/lib/ty
 // ============== STORIES ==============
 
 export async function getAllStories(): Promise<Story[]> {
-  // Временно отключаем проверку авторизации для отладки
-  // try {
-  //   // // await requireAdmin(); // Временно отключено // Временно отключено
-  // } catch (err) {
-  //   console.log("requireAdmin error (ignored):", err);
-  // }
+  console.log("🔵 getAllStories() called");
   
   try {
+    console.log("🔵 Creating Supabase client...");
     const supabase = await createAdminSupabaseClient();
+    console.log("🔵 Supabase client created");
     
-    console.log("Fetching stories from Supabase...");
+    console.log("🔵 Fetching stories from Supabase...");
     const { data, error } = await supabase
       .from("stories")
       .select("*")
       .order("created_at", { ascending: false });
 
+    console.log("🔵 Query result - error:", error, "data length:", data?.length);
+
     if (error) {
-      console.error("Supabase error fetching stories:", error);
+      console.error("❌ Supabase error fetching stories:", JSON.stringify(error, null, 2));
       return [];
     }
     
     console.log(`✅ Loaded ${data?.length || 0} stories from DB`);
     if (data && data.length > 0) {
-      console.log("Stories:", data.map(s => ({ id: s.id, title: s.title, status: s.status })));
+      console.log("📚 Stories:", data.map(s => ({ id: s.id, title: s.title, status: s.status })));
+    } else {
+      console.log("⚠️ No stories found in database");
     }
     return (data || []) as Story[];
   } catch (err) {
     console.error("❌ Exception in getAllStories:", err);
+    if (err instanceof Error) {
+      console.error("❌ Error message:", err.message);
+      console.error("❌ Error stack:", err.stack);
+    }
     return [];
   }
 }
