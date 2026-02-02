@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { getAllStories } from "@/lib/actions/admin";
+import type { Story } from "@/lib/types/database";
 
 export default async function StoriesListPage() {
-  let stories = [];
+  let stories: Story[] = [];
   try {
     stories = await getAllStories();
   } catch (error) {
