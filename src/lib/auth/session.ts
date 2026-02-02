@@ -176,37 +176,28 @@ export async function getUserAdminRole(userId: string): Promise<AdminRole | null
   return data?.role as AdminRole || null;
 }
 
+// Hardcoded админы по Telegram ID (работает без БД)
+const HARDCODED_ADMIN_TELEGRAM_IDS = [1763619724];
+
 /**
  * Require admin access - throws if not admin
- * ВРЕМЕННО ОТКЛЮЧЕНО для отладки
  */
 export async function requireAdmin(): Promise<User> {
-  // Временно возвращаем фейкового пользователя для отладки
-  return {
-    id: "temp-admin-id",
-    telegram_id: 1763619724,
-    first_name: "Admin",
-    last_name: null,
-    username: "admin",
-    photo_url: null,
-    created_at: new Date().toISOString(),
-  };
-  
-  /* ОРИГИНАЛЬНЫЙ КОД - раскомментировать после настройки Supabase
   const user = await getCurrentUser();
   
   if (!user) {
     throw new Error("Unauthorized: No user session");
   }
 
-  const isAdmin = await isUserAdmin(user.id);
+  // Проверяем по hardcoded списку ИЛИ по БД
+  const isHardcodedAdmin = HARDCODED_ADMIN_TELEGRAM_IDS.includes(user.telegram_id);
+  const isDbAdmin = await isUserAdmin(user.id).catch(() => false);
   
-  if (!isAdmin) {
+  if (!isHardcodedAdmin && !isDbAdmin) {
     throw new Error("Forbidden: Admin access required");
   }
 
   return user;
-  */
 }
 
 /**
