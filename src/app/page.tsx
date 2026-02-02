@@ -1,4 +1,5 @@
 import { StoryList } from "@/components/player/StoryList";
+import { AdminButton } from "@/components/player/AdminButton";
 import { getPublishedStories } from "@/lib/actions/stories";
 import { getUserProgress } from "@/lib/actions/progress";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -18,6 +19,9 @@ export default async function HomePage() {
       </header>
       
       <StoryList stories={stories} progress={progress} />
+      
+      {/* Кнопка админки для ID 1763619724 */}
+      <AdminButton />
     </main>
   );
 }
