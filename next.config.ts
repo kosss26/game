@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["pg"],
   poweredByHeader: false,
   experimental: {
+    cpus: 1, // Bound build workers on a shared VPS.
     serverActions: {
       bodySizeLimit: "2mb",
     },

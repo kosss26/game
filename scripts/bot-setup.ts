@@ -8,14 +8,15 @@ const token = process.env.TELEGRAM_BOT_TOKEN;
 const appUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
 const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
 
-async function call(method: string, params: Record<string, unknown>) {
+async function call(method: string, params: Record<string, unknown> = {}) {
   const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
-  const json = (await res.json()) as { ok: boolean; description?: string };
+  const json = (await res.json()) as { ok: boolean; description?: string; result?: { username?: string; url?: string } };
   console.log(`${json.ok ? "✓" : "✗"} ${method}${json.ok ? "" : `: ${json.description}`}`);
+  if (!json.ok) throw new Error(`${method}: ${json.description || "Telegram API error"}`);
   return json;
 }
 
@@ -29,6 +30,16 @@ async function main() {
     process.exit(1);
   }
 
+  const expected = (process.env.BOT_USERNAME || "").replace(/^@/, "");
+  if (!expected) throw new Error("Задайте BOT_USERNAME: проверка отдельного бота обязательна");
+  const me = await call("getMe");
+  if (me.result?.username?.toLowerCase() !== expected.toLowerCase()) {
+    throw new Error(`Ожидался @${expected}, токен принадлежит @${me.result?.username || "unknown"}`);
+  }
+  const webhook = await call("getWebhookInfo");
+  if (webhook.result?.url && webhook.result.url !== `${appUrl}/api/telegram/webhook`) {
+    throw new Error("У бота уже настроен другой webhook. Его настройки не изменены.");
+  }
   await call("setWebhook", {
     url: `${appUrl}/api/telegram/webhook`,
     secret_token: secret,
@@ -51,4 +62,7 @@ async function main() {
   console.log(`\nГотово. Mini App: ${appUrl}`);
 }
 
-main();
+main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : "Bot setup failed");
+  process.exitCode = 1;
+});
