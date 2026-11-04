@@ -1,34 +1,39 @@
 {
-  "name": "tg-miniapp-stories",
-  "version": "0.1.0",
+  "name": "polnoch",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "seed": "node --env-file-if-exists=.env.local --import tsx scripts/seed.ts",
+    "bot:setup": "node --env-file-if-exists=.env.local --import tsx scripts/bot-setup.ts",
+    "check": "npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.47.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@supabase/supabase-js": "^2.47.0",
-    "@supabase/ssr": "^0.5.2"
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.7.0",
-    "tailwindcss": "^3.4.0",
-    "postcss": "^8.4.0",
     "autoprefixer": "^10.4.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.1.0",
     "jest": "^29.7.0",
-    "@types/jest": "^29.5.0",
-    "ts-jest": "^29.2.0"
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "ts-jest": "^29.2.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.7.0"
   }
 }

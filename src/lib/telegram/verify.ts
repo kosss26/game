@@ -1,3 +1,4 @@
+import "server-only";
 import crypto from "crypto";
 
 export interface TelegramUser {
@@ -8,105 +9,62 @@ export interface TelegramUser {
   language_code?: string;
   is_premium?: boolean;
   photo_url?: string;
+  allows_write_to_pm?: boolean;
 }
 
 export interface TelegramInitData {
   query_id?: string;
   user?: TelegramUser;
+  start_param?: string;
   auth_date: number;
   hash: string;
-  [key: string]: unknown;
 }
 
+/** Максимальный возраст initData (сек). Telegram выдаёт свежие данные при каждом открытии. */
+const MAX_AGE_SECONDS = 60 * 60 * 24;
+
 /**
- * Verify Telegram WebApp initData using HMAC-SHA256
+ * Проверка Telegram WebApp initData (HMAC-SHA256)
  * @see https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
  */
-export function verifyTelegramWebAppData(initData: string): TelegramInitData | null {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  
-  if (!botToken) {
-    console.error("TELEGRAM_BOT_TOKEN is not set");
-    return null;
-  }
+export function verifyTelegramWebAppData(
+  initData: string,
+  botToken: string | undefined = process.env.TELEGRAM_BOT_TOKEN,
+  now: number = Date.now()
+): TelegramInitData | null {
+  if (!botToken || !initData || initData.length > 8192) return null;
 
   try {
-    const urlParams = new URLSearchParams(initData);
-    const hash = urlParams.get("hash");
-    
-    if (!hash) {
-      console.error("No hash in initData");
-      return null;
-    }
+    const params = new URLSearchParams(initData);
+    const hash = params.get("hash");
+    if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) return null;
+    params.delete("hash");
 
-    // Remove hash from params for verification
-    urlParams.delete("hash");
-
-    // Sort parameters alphabetically and create data-check-string
-    const dataCheckString = Array.from(urlParams.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
+    const dataCheckString = Array.from(params.entries())
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([key, value]) => `${key}=${value}`)
       .join("\n");
 
-    // Create secret key: HMAC_SHA256(bot_token, "WebAppData")
-    const secretKey = crypto
-      .createHmac("sha256", "WebAppData")
-      .update(botToken)
-      .digest();
+    const secretKey = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
+    const expected = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest();
+    const given = Buffer.from(hash, "hex");
+    if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) return null;
 
-    // Calculate expected hash: HMAC_SHA256(data_check_string, secret_key)
-    const expectedHash = crypto
-      .createHmac("sha256", secretKey)
-      .update(dataCheckString)
-      .digest("hex");
+    const authDate = parseInt(params.get("auth_date") || "0", 10);
+    if (!authDate || now / 1000 - authDate > MAX_AGE_SECONDS) return null;
 
-    if (hash !== expectedHash) {
-      console.error("Hash verification failed");
-      return null;
-    }
-
-    // Check auth_date is not too old (allow 24 hours for development, 1 hour for production)
-    const authDate = parseInt(urlParams.get("auth_date") || "0", 10);
-    const maxAge = process.env.NODE_ENV === "development" ? 86400 : 3600;
-    const now = Math.floor(Date.now() / 1000);
-    
-    if (now - authDate > maxAge) {
-      console.error("Auth date is too old");
-      return null;
-    }
-
-    // Parse user data
-    const userString = urlParams.get("user");
-    const user = userString ? JSON.parse(userString) as TelegramUser : undefined;
+    const userRaw = params.get("user");
+    const user = userRaw ? (JSON.parse(userRaw) as TelegramUser) : undefined;
+    if (user && (typeof user.id !== "number" || !user.first_name)) return null;
 
     return {
-      query_id: urlParams.get("query_id") || undefined,
+      query_id: params.get("query_id") || undefined,
       user,
+      start_param: params.get("start_param") || undefined,
       auth_date: authDate,
       hash,
     };
-  } catch (error) {
-    console.error("Error verifying Telegram initData:", error);
-    return null;
-  }
-}
-
-/**
- * Parse initData without verification (for client-side use)
- */
-export function parseTelegramInitData(initData: string): Partial<TelegramInitData> {
-  try {
-    const urlParams = new URLSearchParams(initData);
-    const userString = urlParams.get("user");
-    const user = userString ? JSON.parse(userString) as TelegramUser : undefined;
-
-    return {
-      query_id: urlParams.get("query_id") || undefined,
-      user,
-      auth_date: parseInt(urlParams.get("auth_date") || "0", 10),
-      hash: urlParams.get("hash") || undefined,
-    };
   } catch {
-    return {};
+    return null;
   }
 }

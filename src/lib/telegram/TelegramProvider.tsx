@@ -1,218 +1,279 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { signIn } from "@/lib/actions/auth";
 
-// Telegram WebApp types
-interface TelegramWebApp {
+// ---------------------------------------------------------------------------
+// Типы Telegram WebApp (используемое подмножество)
+// ---------------------------------------------------------------------------
+
+type HapticStyle = "light" | "medium" | "heavy" | "rigid" | "soft";
+
+export interface TelegramWebApp {
   initData: string;
-  initDataUnsafe: {
-    query_id?: string;
-    user?: {
-      id: number;
-      first_name: string;
-      last_name?: string;
-      username?: string;
-      language_code?: string;
-      is_premium?: boolean;
-    };
-    auth_date?: number;
-    hash?: string;
-  };
+  initDataUnsafe: { user?: { id: number; first_name: string; username?: string }; start_param?: string };
   version: string;
   platform: string;
   colorScheme: "light" | "dark";
-  themeParams: {
-    bg_color?: string;
-    text_color?: string;
-    hint_color?: string;
-    link_color?: string;
-    button_color?: string;
-    button_text_color?: string;
-    secondary_bg_color?: string;
-  };
-  isExpanded: boolean;
-  viewportHeight: number;
-  viewportStableHeight: number;
-  MainButton: {
-    text: string;
-    color: string;
-    textColor: string;
-    isVisible: boolean;
-    isActive: boolean;
-    isProgressVisible: boolean;
-    setText: (text: string) => void;
-    onClick: (callback: () => void) => void;
-    offClick: (callback: () => void) => void;
-    show: () => void;
-    hide: () => void;
-    enable: () => void;
-    disable: () => void;
-    showProgress: (leaveActive?: boolean) => void;
-    hideProgress: () => void;
-  };
-  BackButton: {
-    isVisible: boolean;
-    onClick: (callback: () => void) => void;
-    offClick: (callback: () => void) => void;
-    show: () => void;
-    hide: () => void;
-  };
+  isVersionAtLeast?: (v: string) => boolean;
+  safeAreaInset?: { top: number; bottom: number; left: number; right: number };
+  contentSafeAreaInset?: { top: number; bottom: number; left: number; right: number };
+  BackButton: { show: () => void; hide: () => void; onClick: (cb: () => void) => void; offClick: (cb: () => void) => void };
   HapticFeedback: {
-    impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
+    impactOccurred: (style: HapticStyle) => void;
     notificationOccurred: (type: "error" | "success" | "warning") => void;
     selectionChanged: () => void;
   };
   ready: () => void;
   expand: () => void;
   close: () => void;
-  enableClosingConfirmation: () => void;
-  disableClosingConfirmation: () => void;
-  onEvent: (eventType: string, callback: () => void) => void;
-  offEvent: (eventType: string, callback: () => void) => void;
-  sendData: (data: string) => void;
-  openLink: (url: string, options?: { try_instant_view?: boolean }) => void;
+  disableVerticalSwipes?: () => void;
+  enableClosingConfirmation?: () => void;
+  disableClosingConfirmation?: () => void;
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
+  setBottomBarColor?: (color: string) => void;
+  onEvent: (event: string, cb: (...args: any[]) => void) => void;
+  offEvent: (event: string, cb: (...args: any[]) => void) => void;
+  openInvoice?: (url: string, cb?: (status: "paid" | "cancelled" | "failed" | "pending") => void) => void;
   openTelegramLink: (url: string) => void;
-  showPopup: (params: { title?: string; message: string; buttons?: Array<{ id?: string; type?: string; text?: string }> }, callback?: (buttonId: string) => void) => void;
-  showAlert: (message: string, callback?: () => void) => void;
-  showConfirm: (message: string, callback?: (confirmed: boolean) => void) => void;
-  setHeaderColor: (color: string) => void;
-  setBackgroundColor: (color: string) => void;
+  openLink: (url: string) => void;
+  showConfirm?: (message: string, cb?: (ok: boolean) => void) => void;
+  showAlert?: (message: string, cb?: () => void) => void;
 }
 
 declare global {
   interface Window {
-    Telegram?: {
-      WebApp: TelegramWebApp;
-    };
+    Telegram?: { WebApp: TelegramWebApp };
   }
 }
 
-interface TelegramContextType {
+export interface Session {
+  token: string;
+  user: {
+    id: string;
+    telegram_id: number;
+    first_name: string;
+    username: string | null;
+    photo_url: string | null;
+    is_guest: boolean;
+    skip_credits: number;
+  };
+  isAdmin: boolean;
+}
+
+export type Speed = "normal" | "fast" | "instant";
+
+interface AppContextValue {
   webApp: TelegramWebApp | null;
-  user: TelegramWebApp["initDataUnsafe"]["user"] | null;
-  initData: string | null;
-  isReady: boolean;
-  isDev: boolean;
-  haptic: TelegramWebApp["HapticFeedback"] | null;
+  isTelegram: boolean;
+  ready: boolean;
+  session: Session | null;
+  token: string | null;
+  authError: boolean;
+  retryAuth: () => void;
+  haptic: (kind: HapticStyle | "success" | "error" | "warning" | "select") => void;
+  speed: Speed;
+  setSpeed: (s: Speed) => void;
+  confirm: (message: string) => Promise<boolean>;
+  openInvoice: (url: string) => Promise<"paid" | "cancelled" | "failed" | "pending">;
+  share: (url: string, text: string) => void;
 }
 
-const TelegramContext = createContext<TelegramContextType>({
-  webApp: null,
-  user: null,
-  initData: null,
-  isReady: false,
-  isDev: false,
-  haptic: null,
-});
+const AppContext = createContext<AppContextValue | null>(null);
 
-export function useTelegram() {
-  return useContext(TelegramContext);
+export function useApp(): AppContextValue {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error("useApp вне AppProvider");
+  return ctx;
 }
 
-// Mock user for development
-const DEV_USER = {
-  id: 123456789,
-  first_name: "Dev",
-  last_name: "User",
-  username: "devuser",
-  language_code: "ru",
-};
+/** Обратная совместимость */
+export const useTelegram = useApp;
+
+const TOKEN_KEY = "pl_token";
+const SPEED_KEY = "pl_speed";
+const BG = "#090a0f";
+
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function safeSet(key: string, value: string | null) {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // приватный режим
+  }
+}
+
+function waitForTelegram(timeoutMs = 1500): Promise<TelegramWebApp | null> {
+  return new Promise(resolve => {
+    const started = Date.now();
+    const tick = () => {
+      const tg = window.Telegram?.WebApp;
+      if (tg) return resolve(tg);
+      if (Date.now() - started > timeoutMs) return resolve(null);
+      setTimeout(tick, 50);
+    };
+    tick();
+  });
+}
+
+function applyInsets(tg: TelegramWebApp) {
+  const root = document.documentElement;
+  const safe = tg.safeAreaInset;
+  const content = tg.contentSafeAreaInset;
+  root.style.setProperty("--tg-content-safe-top", `${(safe?.top || 0) + (content?.top || 0)}px`);
+  root.style.setProperty("--tg-content-safe-bottom", `${(safe?.bottom || 0) + (content?.bottom || 0)}px`);
+}
 
 export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [webApp, setWebApp] = useState<TelegramWebApp | null>(null);
-  const [isReady, setIsReady] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authError, setAuthError] = useState(false);
+  const [speed, setSpeedState] = useState<Speed>("normal");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    const tg = window.Telegram?.WebApp;
-
-    if (tg) {
-      // Real Telegram WebApp
-      tg.ready();
-      tg.expand();
-      
-      // Set theme colors
-      if (tg.themeParams.bg_color) {
-        document.documentElement.style.setProperty("--tg-theme-bg-color", tg.themeParams.bg_color);
-      }
-      if (tg.themeParams.text_color) {
-        document.documentElement.style.setProperty("--tg-theme-text-color", tg.themeParams.text_color);
-      }
-      if (tg.themeParams.secondary_bg_color) {
-        document.documentElement.style.setProperty("--tg-theme-secondary-bg-color", tg.themeParams.secondary_bg_color);
-      }
-
-      setWebApp(tg);
-      setIsReady(true);
-    } else {
-      // Development mode without Telegram
-      console.log("Running outside Telegram - using dev mode");
-      setIsReady(true);
-    }
+    const s = safeGet(SPEED_KEY);
+    if (s === "normal" || s === "fast" || s === "instant") setSpeedState(s);
   }, []);
 
-  const isDev = !webApp;
-  const user = webApp?.initDataUnsafe?.user ?? (isDev ? DEV_USER : null);
-  const initData = webApp?.initData ?? null;
-  const haptic = webApp?.HapticFeedback ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const tg = await waitForTelegram();
+      const inTelegram = !!tg && !!tg.initData;
+      if (tg && inTelegram) {
+        try {
+          tg.ready();
+          tg.expand();
+          tg.setHeaderColor?.(BG);
+          tg.setBackgroundColor?.(BG);
+          tg.setBottomBarColor?.(BG);
+          tg.disableVerticalSwipes?.();
+          applyInsets(tg);
+          const onInsets = () => applyInsets(tg);
+          tg.onEvent("safeAreaChanged", onInsets);
+          tg.onEvent("contentSafeAreaChanged", onInsets);
+        } catch {
+          // старые клиенты Telegram
+        }
+        if (!cancelled) setWebApp(tg);
+      }
 
-  return (
-    <TelegramContext.Provider value={{ webApp, user, initData, isReady, isDev, haptic }}>
-      {children}
-    </TelegramContext.Provider>
+      const res = await signIn({ initData: inTelegram ? tg!.initData : null, token: safeGet(TOKEN_KEY) }).catch(() => null);
+      if (cancelled) return;
+      if (res) {
+        safeSet(TOKEN_KEY, res.token);
+        setSession({ token: res.token, user: res.user, isAdmin: res.isAdmin });
+        setAuthError(false);
+      } else {
+        setAuthError(true);
+      }
+      setReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  const haptic = useCallback<AppContextValue["haptic"]>(
+    kind => {
+      const h = webApp?.HapticFeedback;
+      if (!h) return;
+      try {
+        if (kind === "success" || kind === "error" || kind === "warning") h.notificationOccurred(kind);
+        else if (kind === "select") h.selectionChanged();
+        else h.impactOccurred(kind);
+      } catch {
+        // ignore
+      }
+    },
+    [webApp]
   );
+
+  const setSpeed = useCallback((s: Speed) => {
+    setSpeedState(s);
+    safeSet(SPEED_KEY, s);
+  }, []);
+
+  const confirm = useCallback(
+    (message: string) =>
+      new Promise<boolean>(resolve => {
+        if (webApp?.showConfirm) webApp.showConfirm(message, ok => resolve(!!ok));
+        else resolve(window.confirm(message));
+      }),
+    [webApp]
+  );
+
+  const openInvoice = useCallback(
+    (url: string) =>
+      new Promise<"paid" | "cancelled" | "failed" | "pending">(resolve => {
+        if (webApp?.openInvoice) webApp.openInvoice(url, status => resolve(status));
+        else {
+          window.open(url, "_blank");
+          resolve("pending");
+        }
+      }),
+    [webApp]
+  );
+
+  const share = useCallback(
+    (url: string, text: string) => {
+      const link = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+      if (webApp) webApp.openTelegramLink(link);
+      else if (typeof navigator !== "undefined" && navigator.share) navigator.share({ url, text }).catch(() => undefined);
+      else window.open(link, "_blank");
+    },
+    [webApp]
+  );
+
+  const value = useMemo<AppContextValue>(
+    () => ({
+      webApp,
+      isTelegram: !!webApp,
+      ready,
+      session,
+      token: session?.token ?? null,
+      authError,
+      retryAuth: () => setAttempt(a => a + 1),
+      haptic,
+      speed,
+      setSpeed,
+      confirm,
+      openInvoice,
+      share,
+    }),
+    [webApp, ready, session, authError, haptic, speed, setSpeed, confirm, openInvoice, share]
+  );
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
-// Custom hook for MainButton
-export function useMainButton(
-  text: string,
-  onClick: () => void,
-  options?: { visible?: boolean; disabled?: boolean }
-) {
-  const { webApp } = useTelegram();
-
+/**
+ * Нативная кнопка «Назад» Telegram. Возвращает true, если она используется
+ * (тогда экранную кнопку можно не показывать).
+ */
+export function useBackButton(onBack: () => void): boolean {
+  const { webApp } = useApp();
+  const ref = useRef(onBack);
+  ref.current = onBack;
   useEffect(() => {
     if (!webApp) return;
-
-    const { MainButton } = webApp;
-    MainButton.setText(text);
-    MainButton.onClick(onClick);
-
-    if (options?.visible !== false) {
-      MainButton.show();
-    }
-
-    if (options?.disabled) {
-      MainButton.disable();
-    } else {
-      MainButton.enable();
-    }
-
+    const handler = () => ref.current();
+    webApp.BackButton.onClick(handler);
+    webApp.BackButton.show();
     return () => {
-      MainButton.offClick(onClick);
-      MainButton.hide();
+      webApp.BackButton.offClick(handler);
+      webApp.BackButton.hide();
     };
-  }, [webApp, text, onClick, options?.visible, options?.disabled]);
-}
-
-// Custom hook for BackButton
-export function useBackButton(onClick: () => void, visible: boolean = true) {
-  const { webApp } = useTelegram();
-
-  useEffect(() => {
-    if (!webApp) return;
-
-    const { BackButton } = webApp;
-    
-    if (visible) {
-      BackButton.onClick(onClick);
-      BackButton.show();
-    } else {
-      BackButton.hide();
-    }
-
-    return () => {
-      BackButton.offClick(onClick);
-      BackButton.hide();
-    };
-  }, [webApp, onClick, visible]);
+  }, [webApp]);
+  return !!webApp;
 }

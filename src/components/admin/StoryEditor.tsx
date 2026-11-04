@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateStory, deleteStory, publishStory } from "@/lib/actions/admin";
-import type { Story } from "@/lib/types/database";
+import type { Story, StoryMeta } from "@/lib/types/database";
 
 interface StoryEditorProps {
   story: Story;
@@ -17,15 +17,26 @@ export function StoryEditor({ story }: StoryEditorProps) {
     title: story.title,
     description: story.description || "",
     cover_style: story.cover_style || "noir",
+    meta: JSON.stringify(story.meta || {}, null, 2),
+    sort_order: story.sort_order ?? 0,
   });
 
   const handleSave = async () => {
+    let meta: StoryMeta;
+    try {
+      meta = JSON.parse(formData.meta || "{}");
+    } catch {
+      alert("Метаданные: некорректный JSON");
+      return;
+    }
     setIsLoading(true);
     try {
       await updateStory(story.id, {
         title: formData.title,
         description: formData.description || null,
         cover_style: formData.cover_style,
+        sort_order: Number(formData.sort_order) || 0,
+        meta,
       });
       setIsEditing(false);
       router.refresh();
@@ -50,8 +61,19 @@ export function StoryEditor({ story }: StoryEditorProps) {
     }
   };
 
+  const handleUnpublish = async () => {
+    if (!confirm("Снять историю с публикации? Игроки перестанут её видеть.")) return;
+    setIsLoading(true);
+    try {
+      await updateStory(story.id, { status: "draft" });
+      router.refresh();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handlePublish = async () => {
-    if (!confirm("Опубликовать историю? Все дни должны быть опубликованы.")) return;
+    if (!confirm("Опубликовать историю? Игроки увидят все опубликованные дни.")) return;
     
     setIsLoading(true);
     try {
@@ -84,6 +106,9 @@ export function StoryEditor({ story }: StoryEditorProps) {
               <span className="text-xs text-tg-text-hint">
                 Стиль: {story.cover_style}
               </span>
+              <a href={`/story/${story.id}`} target="_blank" className="text-xs text-tg-accent">
+                Открыть как игрок ↗
+              </a>
             </div>
           </div>
           <div className="flex gap-2">
@@ -93,13 +118,21 @@ export function StoryEditor({ story }: StoryEditorProps) {
             >
               Изменить
             </button>
-            {story.status !== "published" && (
+            {story.status !== "published" ? (
               <button
                 onClick={handlePublish}
                 disabled={isLoading}
                 className="px-3 py-1.5 text-sm bg-green-500/20 text-green-400 rounded-lg"
               >
                 Опубликовать
+              </button>
+            ) : (
+              <button
+                onClick={handleUnpublish}
+                disabled={isLoading}
+                className="px-3 py-1.5 text-sm bg-yellow-500/15 text-yellow-400 rounded-lg"
+              >
+                Снять
               </button>
             )}
           </div>
@@ -144,11 +177,37 @@ export function StoryEditor({ story }: StoryEditorProps) {
             onChange={(e) => setFormData({ ...formData, cover_style: e.target.value })}
             className="w-full bg-tg-bg border border-tg-border rounded-xl px-4 py-3 text-tg-text focus:outline-none focus:border-tg-accent"
           >
+            <option value="forest">Лес / санаторий</option>
             <option value="noir">Нуар</option>
             <option value="romance">Романтика</option>
             <option value="thriller">Триллер</option>
             <option value="mystery">Мистика</option>
           </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-tg-text-secondary mb-2">
+            Порядок в каталоге
+          </label>
+          <input
+            type="number"
+            value={formData.sort_order}
+            onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 0 })}
+            className="w-full bg-tg-bg border border-tg-border rounded-xl px-4 py-3 text-tg-text focus:outline-none focus:border-tg-accent"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-tg-text-secondary mb-2">
+            Метаданные (JSON): tagline, genre, age_rating, main_character, characters, endings
+          </label>
+          <textarea
+            value={formData.meta}
+            onChange={(e) => setFormData({ ...formData, meta: e.target.value })}
+            rows={12}
+            spellCheck={false}
+            className="w-full bg-tg-bg border border-tg-border rounded-xl px-4 py-3 font-mono text-xs text-tg-text focus:outline-none focus:border-tg-accent"
+          />
         </div>
 
         <div className="flex gap-2 pt-2">

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Day, Scene, Choice } from "@/lib/types/database";
+import type { Day, Scene, Choice, Character } from "@/lib/types/database";
+import { DayPreview } from "./DayPreview";
 import { SceneTimeline } from "./SceneTimeline";
 import { ScriptImporter } from "./ScriptImporter";
 import { DayValidator } from "./DayValidator";
@@ -12,17 +13,20 @@ interface DayEditorTabsProps {
   day: Day;
   scenes: Scene[];
   choices: Choice[];
+  storyCharacters?: Record<string, Character>;
+  mainCharacter?: string;
 }
 
-type Tab = "timeline" | "import" | "validate" | "publish" | "settings";
+type Tab = "timeline" | "import" | "preview" | "validate" | "publish" | "settings";
 
-export function DayEditorTabs({ day, scenes, choices }: DayEditorTabsProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("timeline");
+export function DayEditorTabs({ day, scenes, choices, storyCharacters, mainCharacter }: DayEditorTabsProps) {
+  const [activeTab, setActiveTab] = useState<Tab>("import");
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
-    { id: "timeline", label: "Сцены", icon: "📝" },
-    { id: "import", label: "Импорт", icon: "📄" },
+    { id: "import", label: "Скрипт", icon: "✍️" },
+    { id: "preview", label: "Тест", icon: "▶" },
     { id: "validate", label: "Проверка", icon: "✓" },
+    { id: "timeline", label: "Сцены", icon: "📝" },
     { id: "publish", label: "Публикация", icon: "🚀" },
     { id: "settings", label: "Настройки", icon: "⚙" },
   ];
@@ -53,8 +57,9 @@ export function DayEditorTabs({ day, scenes, choices }: DayEditorTabsProps) {
           <SceneTimeline day={day} scenes={scenes} choices={choices} />
         )}
         {activeTab === "import" && (
-          <ScriptImporter day={day} existingScenesCount={scenes.length} />
+          <ScriptImporter day={day} existingScenesCount={scenes.length} storyCharacters={storyCharacters} />
         )}
+        {activeTab === "preview" && <DayPreview day={day} mainCharacter={mainCharacter} />}
         {activeTab === "validate" && (
           <DayValidator day={day} scenes={scenes} choices={choices} />
         )}

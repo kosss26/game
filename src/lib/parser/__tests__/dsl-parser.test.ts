@@ -1,347 +1,183 @@
-import { parseScript, validateScript, convertToDbFormat } from "../dsl-parser";
+import { parseScript, validateScript, convertToDbFormat, parseFlagsString } from "../dsl-parser";
 
-describe("DSL Parser", () => {
-  describe("Basic message parsing", () => {
-    it("should parse NPC message", () => {
-      const result = parseScript("NPC: Привет!");
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0]).toMatchObject({
-        type: "message",
-        speaker: "npc",
-        text: "Привет!",
-      });
-    });
-
-    it("should parse ME message", () => {
-      const result = parseScript("ME: Привет в ответ");
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0]).toMatchObject({
-        type: "message",
-        speaker: "me",
-        text: "Привет в ответ",
-      });
-    });
-
-    it("should parse SYS message", () => {
-      const result = parseScript("SYS: День 1");
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0]).toMatchObject({
-        type: "system",
-        speaker: "system",
-        text: "День 1",
-      });
-    });
-
-    it("should parse multiple messages", () => {
-      const script = `
-NPC: Первое
-ME: Второе
-SYS: Третье
-      `;
-      const result = parseScript(script);
-      expect(result.scenes).toHaveLength(3);
-    });
+describe("DSL parser — реплики", () => {
+  it("парсит NPC / ME / SYS", () => {
+    const r = parseScript("NPC: Привет\nME: Здравствуй\nSYS: 03:12");
+    expect(r.errors).toEqual([]);
+    expect(r.scenes.map(s => [s.type, s.speaker, s.text])).toEqual([
+      ["message", "npc", "Привет"],
+      ["message", "me", "Здравствуй"],
+      ["system", "system", "03:12"],
+    ]);
   });
 
-  describe("Typing indicator", () => {
-    it("should parse ... as typing indicator", () => {
-      const result = parseScript("...");
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0]).toMatchObject({
-        type: "typing",
-        meta: { typing_delay: 1200 },
-      });
-    });
-
-    it("should apply custom typing delay", () => {
-      const script = `
-[typing 2000ms]
-...
-      `;
-      const result = parseScript(script);
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0].meta?.typing_delay).toBe(2000);
-    });
+  it("регистронезависимые префиксы и спецсимволы в тексте", () => {
+    const r = parseScript('npc: Цена: 100$ — "дорого"?! 😅');
+    expect(r.scenes[0].text).toBe('Цена: 100$ — "дорого"?! 😅');
   });
 
-  describe("Pause scenes", () => {
-    it("should parse pause in seconds", () => {
-      const result = parseScript("[pause 10s]");
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0]).toMatchObject({
-        type: "pause",
-        meta: { pause_duration: 10000 },
-      });
-    });
-
-    it("should parse pause in milliseconds", () => {
-      const result = parseScript("[pause 500ms]");
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0].meta?.pause_duration).toBe(500);
-    });
-
-    it("should default to seconds if no unit", () => {
-      const result = parseScript("[pause 5]");
-      expect(result.scenes[0].meta?.pause_duration).toBe(5000);
-    });
+  it("персонажи через @char", () => {
+    const r = parseScript("@char asya Ася | color=#e17076 | initials=А | status=в сети\nasya: Ты здесь?");
+    expect(r.errors).toEqual([]);
+    expect(r.dayMeta.characters.asya).toEqual({ name: "Ася", color: "#e17076", initials: "А", status: "в сети" });
+    expect(r.scenes[0]).toMatchObject({ type: "message", speaker: "npc", text: "Ты здесь?", meta: { character: "asya" } });
   });
 
-  describe("Delay and meta modifiers", () => {
-    it("should apply delay to next message", () => {
-      const script = `
-[delay 800ms]
-NPC: Сообщение с задержкой
-      `;
-      const result = parseScript(script);
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0].meta?.message_delay).toBe(800);
-    });
-
-    it("should apply typing delay to next message", () => {
-      const script = `
-[typing 1500ms]
-NPC: Долго печатаю
-      `;
-      const result = parseScript(script);
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0].meta?.typing_delay).toBe(1500);
-    });
+  it("персонажи истории из опций", () => {
+    const r = parseScript("gleb: Кто это?", { characters: { gleb: { name: "Глеб" } } });
+    expect(r.errors).toEqual([]);
+    expect(r.scenes[0].meta.character).toBe("gleb");
   });
 
-  describe("Tags", () => {
-    it("should parse tag at end of message", () => {
-      const result = parseScript("NPC: Важная точка #tag:important_point");
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0].tag).toBe("important_point");
-      expect(result.scenes[0].text).toBe("Важная точка");
-    });
-
-    it("should handle tags with underscores", () => {
-      const result = parseScript("NPC: Текст #tag:some_long_tag_name");
-      expect(result.scenes[0].tag).toBe("some_long_tag_name");
-    });
+  it("ошибка на необъявленного персонажа", () => {
+    const r = parseScript("unknown: текст");
+    expect(r.errors[0].message).toMatch(/Неизвестный персонаж/);
   });
 
-  describe("Background meta", () => {
-    it("should parse background style", () => {
-      const result = parseScript("[bg noir]");
-      expect(result.dayMeta.backgroundStyle).toBe("noir");
-      expect(result.scenes).toHaveLength(0);
-    });
-
-    it("should handle different background styles", () => {
-      expect(parseScript("[bg romance]").dayMeta.backgroundStyle).toBe("romance");
-      expect(parseScript("[bg thriller]").dayMeta.backgroundStyle).toBe("thriller");
-      expect(parseScript("[bg mystery]").dayMeta.backgroundStyle).toBe("mystery");
-    });
+  it("строки с двоеточием, не похожие на реплику, — предупреждение", () => {
+    const r = parseScript("Примечание: это не реплика");
+    expect(r.errors).toEqual([]);
+    expect(r.warnings).toHaveLength(1);
   });
 
-  describe("Choice blocks", () => {
-    it("should parse choice block with options", () => {
-      const script = `
-CHOICE:
-- Вариант 1 -> goto tag1
-- Вариант 2 -> goto tag2
-      `;
-      const result = parseScript(script);
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0].type).toBe("choice");
-      expect(result.choices).toHaveLength(2);
-      expect(result.choices[0].label).toBe("Вариант 1");
-      expect(result.choices[0].gotoTag).toBe("tag1");
-      expect(result.choices[1].label).toBe("Вариант 2");
-      expect(result.choices[1].gotoTag).toBe("tag2");
-    });
+  it("комментарии и пустые строки игнорируются", () => {
+    const r = parseScript("// коммент\n# тоже\n\nNPC: Текст");
+    expect(r.scenes).toHaveLength(1);
+  });
+});
 
-    it("should parse choice with flags", () => {
-      const script = `
-CHOICE:
-- Быть добрым -> goto good [set flag:mood=good,karma=true]
-      `;
-      const result = parseScript(script);
-      expect(result.choices[0].setFlags).toEqual({
-        mood: "good",
-        karma: true,
-      });
-    });
-
-    it("should parse choice with simple flags", () => {
-      const script = `
-CHOICE:
-- Выбор -> goto next [set chosen=true]
-      `;
-      const result = parseScript(script);
-      expect(result.choices[0].setFlags).toEqual({ chosen: true });
-    });
+describe("DSL parser — темп", () => {
+  it("печатает, задержки, паузы", () => {
+    const r = parseScript("...\n... 2s\n[typing 1500ms]\n[delay 300ms]\nNPC: Т\n[pause 10s]\n[pause 5m Ася не в сети]\n[pause 500ms]");
+    expect(r.errors).toEqual([]);
+    expect(r.scenes[0]).toMatchObject({ type: "typing", meta: { typing_delay: 1200 } });
+    expect(r.scenes[1]).toMatchObject({ type: "typing", meta: { typing_delay: 2000 } });
+    expect(r.scenes[2].meta).toEqual({ typing_delay: 1500, message_delay: 300 });
+    expect(r.scenes[3].meta).toEqual({ pause_duration: 10000 });
+    expect(r.scenes[4].meta).toEqual({ pause_duration: 300000, pause_label: "Ася не в сети" });
+    expect(r.scenes[5].meta).toEqual({ pause_duration: 500 });
   });
 
-  describe("Input scenes", () => {
-    it("should parse input prompt", () => {
-      const result = parseScript("INPUT: Как тебя зовут? -> goto after_name");
-      expect(result.scenes).toHaveLength(1);
-      expect(result.scenes[0]).toMatchObject({
-        type: "input",
-        text: "Как тебя зовут?",
-      });
-    });
+  it("метаданные дня", () => {
+    const r = parseScript("@title Неизвестный номер\n@minutes 15\n@wait 12h\n@recap Цитата\n@teaser Дальше\n@bg mystery\nNPC: x");
+    expect(r.dayMeta).toMatchObject({ title: "Неизвестный номер", minutes: 15, waitHours: 12, recap: "Цитата", teaser: "Дальше", backgroundStyle: "mystery" });
+    expect(parseScript("@wait 30m\nNPC: x").dayMeta.waitHours).toBe(0.5);
+    expect(parseScript("[bg noir]\nNPC: x").dayMeta.backgroundStyle).toBe("noir");
+  });
+});
 
-    it("should parse input with flags", () => {
-      const script = "INPUT: Введи код -> goto check [set code_entered=true]";
-      const result = parseScript(script);
-      expect(result.choices[0].setFlags).toEqual({ code_entered: true });
-    });
+describe("DSL parser — ветвление", () => {
+  it("метки трёх видов", () => {
+    const r = parseScript(":: a\nNPC: 1\n== b ==\nNPC: 2\nNPC: 3 #tag:c\n#tag:d\nNPC: 4");
+    expect(r.errors).toEqual([]);
+    expect(r.scenes.map(s => s.tag)).toEqual(["a", "b", "c", "d"]);
   });
 
-  describe("Error handling", () => {
-    it("should report missing goto tag", () => {
-      const script = `
-NPC: Начало
-CHOICE:
-- Вариант -> goto nonexistent_tag
-      `;
-      const result = parseScript(script);
-      expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].message).toContain("nonexistent_tag");
-    });
-
-    it("should report choice outside block", () => {
-      const script = "- Одинокий вариант -> goto somewhere";
-      const result = parseScript(script);
-      expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].message).toContain("вне блока CHOICE");
-    });
-
-    it("should report empty script", () => {
-      const result = parseScript("");
-      const validated = validateScript(result);
-      expect(validated.some(e => e.message.includes("пустой"))).toBe(true);
-    });
+  it("несколько меток подряд не теряются", () => {
+    const r = parseScript(":: a\n:: b\nNPC: x\n-> a\n-> b");
+    expect(r.errors).toEqual([]);
+    const tags = r.scenes.map(s => s.tag).filter(Boolean);
+    expect(tags).toEqual(["a", "b"]);
   });
 
-  describe("Validation", () => {
-    it("should warn about choice scene without choices", () => {
-      const script = `
-NPC: Текст #tag:start
-CHOICE:
-      `;
-      const result = parseScript(script);
-      const errors = validateScript(result);
-      expect(errors.some(e => e.message.includes("не имеет вариантов"))).toBe(true);
-    });
+  it("переходы, конец, условия, SET", () => {
+    const r = parseScript(":: top\nNPC: x\nIF trust >= 2 -> top\nSET trust += 1, met\n-> top\nGOTO top\nEND good\n-> END");
+    expect(r.errors).toEqual([]);
+    expect(r.scenes.slice(1).map(s => s.type)).toEqual(["jump", "set", "jump", "jump", "end", "end"]);
+    expect(r.scenes[1].meta).toEqual({ condition: "trust >= 2", goto_tag: "top" });
+    expect(r.scenes[2].meta).toEqual({ ops: ["trust += 1", "met"] });
+    expect(r.scenes[5].meta).toEqual({ ending: "good" });
   });
 
-  describe("Complex script", () => {
-    it("should parse a complete day script", () => {
-      const script = `
-[bg noir]
-
-SYS: День 1. Знакомство.
-
-...
-NPC: Привет! Ты новенький? #tag:start
-
-[delay 500ms]
-...
-ME: Да, первый день.
-
-[pause 3s]
-
-NPC: Кстати, как тебя зовут?
-
-INPUT: Введи имя -> goto after_name [set name_entered=true]
-
-NPC: Приятно познакомиться! #tag:after_name
-
-CHOICE:
-- Пойти в офис -> goto office [set location=office]
-- Выпить кофе -> goto coffee [set location=coffee]
-
-NPC: Идём в офис! #tag:office
-
-NPC: Пойдём за кофе! #tag:coffee
-      `;
-
-      const result = parseScript(script);
-      
-      expect(result.errors).toHaveLength(0);
-      expect(result.dayMeta.backgroundStyle).toBe("noir");
-      expect(result.scenes.length).toBeGreaterThan(5);
-      // 2 choices from CHOICE block + 1 pseudo-choice from INPUT
-      expect(result.choices.length).toBe(3);
-      
-      // Check for all scene types
-      const types = result.scenes.map(s => s.type);
-      expect(types).toContain("message");
-      expect(types).toContain("system");
-      expect(types).toContain("typing");
-      expect(types).toContain("pause");
-      expect(types).toContain("choice");
-      expect(types).toContain("input");
-    });
+  it("условная реплика превращается в jump со skip", () => {
+    const r = parseScript("[if told] NPC: Спасибо");
+    expect(r.errors).toEqual([]);
+    expect(r.scenes[0]).toMatchObject({ type: "jump", meta: { condition: "!(told)", skip: 1 } });
+    expect(r.scenes[1]).toMatchObject({ type: "message", text: "Спасибо" });
   });
 
-  describe("convertToDbFormat", () => {
-    it("should convert parsed result to DB format", () => {
-      const script = `
-NPC: Привет #tag:start
-CHOICE:
-- Вариант -> goto start
-      `;
-      const result = parseScript(script);
-      const dbFormat = convertToDbFormat(result);
-      
-      expect(dbFormat.scenes).toHaveLength(2);
-      expect(dbFormat.choices).toHaveLength(1);
-      expect(dbFormat.scenes[0].tag).toBe("start");
-      expect(dbFormat.choices[0].goto_tag).toBe("start");
-    });
-
-    it("should filter out input pseudo-choices", () => {
-      const script = "INPUT: Текст -> goto next";
-      const result = parseScript(script);
-      const dbFormat = convertToDbFormat(result);
-      
-      expect(dbFormat.choices).toHaveLength(0); // __input__ filtered out
-    });
+  it("неизвестная метка — ошибка", () => {
+    const r = parseScript("-> nowhere");
+    expect(r.errors[0].message).toMatch(/не найдена/);
   });
 
-  describe("Edge cases", () => {
-    it("should ignore comments starting with //", () => {
-      const script = `
-// Это комментарий
-NPC: Текст
-      `;
-      const result = parseScript(script);
-      expect(result.scenes).toHaveLength(1);
-    });
+  it("дублирующаяся метка — ошибка", () => {
+    const r = parseScript(":: a\nNPC: 1\n:: a\nNPC: 2");
+    expect(r.errors[0].message).toMatch(/дважды/);
+  });
 
-    it("should handle empty lines gracefully", () => {
-      const script = `
-NPC: Первое
+  it("ошибка в условии", () => {
+    const r = parseScript("IF (a -> x\n:: x\nNPC: y");
+    expect(r.errors.some(e => /скобки|условии/.test(e.message))).toBe(true);
+  });
 
+  it("висящая метка в конце становится концом дня", () => {
+    const r = parseScript("NPC: x\n-> fin\n:: fin");
+    expect(r.errors).toEqual([]);
+    expect(r.scenes[r.scenes.length - 1]).toMatchObject({ type: "end", tag: "fin" });
+  });
+});
 
+describe("DSL parser — выбор и ввод", () => {
+  const script = `:: a
+NPC: q
+CHOICE: Что ответить?
+- Кто ты? -> a [set trust -= 1]
+- Помогу [set trust += 1, helper]
+- (Промолчать) -> a
+- Секрет [if knows] [set x = "строка, с запятой"]
+NPC: after`;
 
-NPC: Второе
+  it("варианты с переходами, флагами, условиями", () => {
+    const r = parseScript(script);
+    expect(r.errors).toEqual([]);
+    const choiceScene = r.scenes.find(s => s.type === "choice")!;
+    expect(choiceScene.meta.prompt).toBe("Что ответить?");
+    expect(r.choices.map(c => [c.label, c.gotoTag, c.setFlags, c.condition])).toEqual([
+      ["Кто ты?", "a", { trust: "-=1" }, null],
+      ["Помогу", null, { trust: "+=1", helper: true }, null],
+      ["(Промолчать)", "a", {}, null],
+      ["Секрет", null, { x: "строка, с запятой" }, "knows"],
+    ]);
+    // Блок выбора закрывается первой не-вариантной строкой
+    expect(r.scenes[r.scenes.length - 1].text).toBe("after");
+  });
 
-      `;
-      const result = parseScript(script);
-      expect(result.scenes).toHaveLength(2);
-    });
+  it("формат v1: -> goto tag [set flag:x=true]", () => {
+    const r = parseScript("CHOICE:\n- Да -> goto yes [set flag:angry=true]\n- Нет -> goto no\n\nNPC: y #tag:yes\nNPC: n #tag:no");
+    expect(r.errors).toEqual([]);
+    expect(r.choices[0]).toMatchObject({ label: "Да", gotoTag: "yes", setFlags: { angry: true } });
+  });
 
-    it("should be case-insensitive for prefixes", () => {
-      const script = `
-npc: Нижний регистр
-NPC: Верхний регистр
-Npc: Смешанный
-      `;
-      const result = parseScript(script);
-      expect(result.scenes).toHaveLength(3);
-      expect(result.scenes.every(s => s.speaker === "npc")).toBe(true);
-    });
+  it("вариант вне блока — ошибка; пустой CHOICE — ошибка", () => {
+    expect(parseScript("- Вариант -> x").errors[0].message).toMatch(/вне блока/);
+    expect(parseScript("CHOICE:\nNPC: x").errors[0].message).toMatch(/без вариантов/);
+  });
 
-    it("should preserve message text with special characters", () => {
-      const result = parseScript("NPC: Привет! Как дела? :) #tag:special");
-      expect(result.scenes[0].text).toBe("Привет! Как дела? :)");
-    });
+  it("INPUT v2 и v1", () => {
+    const r = parseScript("INPUT name: Как тебя зовут?\nINPUT: Код? -> goto ok [set coded=true]\n:: ok\nNPC: Привет, {name}");
+    expect(r.errors).toEqual([]);
+    expect(r.scenes[0]).toMatchObject({ type: "input", text: "Как тебя зовут?", meta: { input_key: "name" } });
+    expect(r.scenes[1]).toMatchObject({ type: "input", text: "Код?" });
+    expect(r.scenes[2]).toMatchObject({ type: "set", meta: { ops: ["coded=true"] } });
+    expect(r.scenes[3]).toMatchObject({ type: "jump", meta: { goto_tag: "ok" } });
+  });
+});
+
+describe("validate / convert", () => {
+  it("пустой скрипт", () => {
+    expect(validateScript(parseScript(""))[0].message).toMatch(/пустой/);
+  });
+
+  it("convertToDbFormat сохраняет условия и метки", () => {
+    const r = parseScript("CHOICE:\n- A -> x [if t]\n:: x\nNPC: done");
+    const db = convertToDbFormat(r);
+    expect(db.choices[0]).toEqual({ scene_index: 0, label: "A", goto_tag: "x", set_flags: undefined, condition: "t", sort_index: 0 });
+    expect(db.scenes[1].tag).toBe("x");
+  });
+
+  it("parseFlagsString", () => {
+    expect(parseFlagsString("a, !b, c=2, d=false, e+=3, f='x'")).toEqual({ a: true, b: false, c: 2, d: false, e: "+=3", f: "x" });
+    expect(parseFlagsString(undefined)).toEqual({});
   });
 });

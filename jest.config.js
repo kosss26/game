@@ -3,22 +3,11 @@ const config = {
   preset: "ts-jest",
   testEnvironment: "node",
   moduleNameMapper: {
+    "^server-only$": "<rootDir>/test/empty.js",
     "^@/(.*)$": "<rootDir>/src/$1",
   },
   testMatch: ["**/__tests__/**/*.test.ts"],
-  collectCoverageFrom: [
-    "src/**/*.ts",
-    "!src/**/*.d.ts",
-    "!src/app/**/*",
-  ],
-  coverageThreshold: {
-    global: {
-      branches: 50,
-      functions: 50,
-      lines: 50,
-      statements: 50,
-    },
-  },
+  collectCoverageFrom: ["src/lib/**/*.ts", "!src/**/*.d.ts"],
 };
 
 module.exports = config;

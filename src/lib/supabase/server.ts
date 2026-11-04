@@ -1,40 +1,28 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import "server-only";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { config, isLocalDb } from "@/lib/config";
+import { createLocalClient } from "@/lib/db/local";
 
-export async function createServerSupabaseClient() {
-  const cookieStore = await cookies();
+let client: SupabaseClient | null = null;
 
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }>) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // Server Component - ignore
-          }
-        },
-      },
+/**
+ * Серверный клиент БД с правами service role.
+ * Без настроек Supabase используется локальная демо-база (.data/local-db.json).
+ */
+export async function createAdminSupabaseClient(): Promise<SupabaseClient> {
+  if (isLocalDb()) {
+    if (config.isProduction && process.env.DATA_SOURCE !== "local") {
+      throw new Error("Supabase не настроен: задайте NEXT_PUBLIC_SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY");
     }
-  );
+    return createLocalClient() as unknown as SupabaseClient;
+  }
+  if (!client) {
+    client = createClient(config.supabaseUrl, config.supabaseServiceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return client;
 }
 
-export async function createAdminSupabaseClient() {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      cookies: {
-        getAll: () => [],
-        setAll: () => {},
-      },
-    }
-  );
-}
+/** Синоним для читаемости */
+export const db = createAdminSupabaseClient;

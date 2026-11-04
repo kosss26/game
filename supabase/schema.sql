@@ -1,60 +1,76 @@
--- Telegram MiniApp Stories - Database Schema
--- Run this in your Supabase SQL Editor
+-- =====================================================================
+-- «Полночь» — интерактивные чат-истории для Telegram
+-- Полная схема БД (для нового проекта Supabase).
+-- Для уже существующей базы v0.1 используйте supabase/migrations/002_release_v1.sql
+-- =====================================================================
 
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Users table (synced from Telegram)
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- ---------------------------------------------------------------------
+-- Пользователи (синхронизируются из Telegram; гости — отрицательный telegram_id)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   telegram_id BIGINT UNIQUE NOT NULL,
   first_name TEXT NOT NULL,
   last_name TEXT,
   username TEXT,
   photo_url TEXT,
+  language_code TEXT,
+  is_guest BOOLEAN NOT NULL DEFAULT FALSE,
+  referred_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  skip_credits INT NOT NULL DEFAULT 0 CHECK (skip_credits >= 0),
+  bot_blocked BOOLEAN NOT NULL DEFAULT FALSE,
+  -- endings: { [story_id]: string[] } — коллекция открытых концовок
+  meta JSONB NOT NULL DEFAULT '{}',
+  last_seen_at TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Admin users table
-CREATE TABLE admin_users (
+CREATE TABLE IF NOT EXISTS admin_users (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   role TEXT NOT NULL CHECK (role IN ('viewer', 'editor', 'admin')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Stories table
-CREATE TABLE stories (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- ---------------------------------------------------------------------
+-- Контент
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS stories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug TEXT UNIQUE,
   title TEXT NOT NULL,
   description TEXT,
   cover_style TEXT DEFAULT 'noir',
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+  sort_order INT NOT NULL DEFAULT 0,
+  -- characters, endings, tagline, genre, age_rating, accent
+  meta JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Days table
-CREATE TABLE days (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+CREATE TABLE IF NOT EXISTS days (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   story_id UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
-  day_number INT NOT NULL,
+  day_number INT NOT NULL CHECK (day_number > 0),
   title TEXT NOT NULL,
   unlock_at TIMESTAMPTZ,
   estimated_minutes INT,
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+  -- background_style, recap_text, wait_hours, script, teaser
   meta JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(story_id, day_number)
 );
 
--- Scenes table
-CREATE TABLE scenes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+CREATE TABLE IF NOT EXISTS scenes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   day_id UUID NOT NULL REFERENCES days(id) ON DELETE CASCADE,
   sort_index INT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('message', 'typing', 'pause', 'choice', 'input', 'system')),
+  type TEXT NOT NULL CHECK (type IN ('message', 'typing', 'pause', 'choice', 'input', 'system', 'jump', 'set', 'end')),
   speaker TEXT CHECK (speaker IN ('npc', 'me', 'system') OR speaker IS NULL),
   text TEXT,
   meta JSONB DEFAULT '{}',
@@ -63,56 +79,24 @@ CREATE TABLE scenes (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create index for tag lookups
-CREATE INDEX idx_scenes_tag ON scenes(day_id, tag) WHERE tag IS NOT NULL;
-CREATE INDEX idx_scenes_day_sort ON scenes(day_id, sort_index);
+CREATE INDEX IF NOT EXISTS idx_scenes_tag ON scenes(day_id, tag) WHERE tag IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_scenes_day_sort ON scenes(day_id, sort_index);
 
--- Choices table
-CREATE TABLE choices (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+CREATE TABLE IF NOT EXISTS choices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   scene_id UUID NOT NULL REFERENCES scenes(id) ON DELETE CASCADE,
   label TEXT NOT NULL,
   goto_tag TEXT,
   goto_scene_id UUID REFERENCES scenes(id) ON DELETE SET NULL,
   set_flags JSONB DEFAULT '{}',
+  condition TEXT,
   sort_index INT NOT NULL DEFAULT 0
 );
 
-CREATE INDEX idx_choices_scene ON choices(scene_id);
+CREATE INDEX IF NOT EXISTS idx_choices_scene ON choices(scene_id);
 
--- Progress table
-CREATE TABLE progresses (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  story_id UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
-  day_id UUID NOT NULL REFERENCES days(id) ON DELETE CASCADE,
-  scene_id UUID REFERENCES scenes(id) ON DELETE SET NULL,
-  flags JSONB DEFAULT '{}',
-  completed BOOLEAN DEFAULT FALSE,
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(user_id, story_id, day_id)
-);
-
-CREATE INDEX idx_progresses_user ON progresses(user_id);
-CREATE INDEX idx_progresses_story ON progresses(story_id);
-
--- Choice events for analytics
-CREATE TABLE choice_events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  story_id UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
-  day_id UUID NOT NULL REFERENCES days(id) ON DELETE CASCADE,
-  scene_id UUID NOT NULL REFERENCES scenes(id) ON DELETE CASCADE,
-  choice_id UUID NOT NULL REFERENCES choices(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_choice_events_scene ON choice_events(scene_id);
-CREATE INDEX idx_choice_events_day ON choice_events(day_id);
-
--- Snapshots for published versions
-CREATE TABLE snapshots (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+CREATE TABLE IF NOT EXISTS snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   day_id UUID NOT NULL REFERENCES days(id) ON DELETE CASCADE,
   version INT NOT NULL,
   snapshot_json JSONB NOT NULL,
@@ -120,9 +104,69 @@ CREATE TABLE snapshots (
   UNIQUE(day_id, version)
 );
 
-CREATE INDEX idx_snapshots_day ON snapshots(day_id, version DESC);
+CREATE INDEX IF NOT EXISTS idx_snapshots_day ON snapshots(day_id, version DESC);
 
--- Updated at trigger function
+-- ---------------------------------------------------------------------
+-- Прогресс игроков
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS progresses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  story_id UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  day_id UUID NOT NULL REFERENCES days(id) ON DELETE CASCADE,
+  -- scene_id хранится как текст из снапшота (без FK: снапшоты неизменяемы,
+  -- а черновые сцены могут быть удалены при повторном импорте)
+  scene_id TEXT,
+  flags JSONB DEFAULT '{}',
+  history JSONB NOT NULL DEFAULT '[]',
+  state JSONB NOT NULL DEFAULT '{}',
+  snapshot_version INT,
+  completed BOOLEAN DEFAULT FALSE,
+  completed_at TIMESTAMPTZ,
+  notified_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, story_id, day_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_progresses_user ON progresses(user_id);
+CREATE INDEX IF NOT EXISTS idx_progresses_story ON progresses(story_id);
+CREATE INDEX IF NOT EXISTS idx_progresses_notify ON progresses(completed, notified_at) WHERE completed = TRUE;
+
+CREATE TABLE IF NOT EXISTS choice_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  story_id UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  day_id UUID NOT NULL REFERENCES days(id) ON DELETE CASCADE,
+  scene_id TEXT NOT NULL,
+  choice_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_choice_events_scene ON choice_events(scene_id);
+CREATE INDEX IF NOT EXISTS idx_choice_events_day ON choice_events(day_id);
+-- Один голос на игрока на сцену выбора: статистика «как выбрали другие» честная
+CREATE UNIQUE INDEX IF NOT EXISTS uq_choice_events_user_scene ON choice_events(user_id, scene_id);
+
+-- ---------------------------------------------------------------------
+-- Покупки (Telegram Stars)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS purchases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  story_id UUID REFERENCES stories(id) ON DELETE CASCADE,
+  product TEXT NOT NULL CHECK (product IN ('skip_day', 'season_pass')),
+  day_number INT,
+  stars INT NOT NULL DEFAULT 0,
+  source TEXT NOT NULL DEFAULT 'stars' CHECK (source IN ('stars', 'credit', 'gift')),
+  telegram_charge_id TEXT UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_purchases_user_story ON purchases(user_id, story_id);
+
+-- ---------------------------------------------------------------------
+-- updated_at
+-- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -131,25 +175,24 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Apply updated_at triggers
-CREATE TRIGGER update_users_updated_at
-  BEFORE UPDATE ON users
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DROP TRIGGER IF EXISTS update_stories_updated_at ON stories;
+CREATE TRIGGER update_stories_updated_at BEFORE UPDATE ON stories
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DROP TRIGGER IF EXISTS update_days_updated_at ON days;
+CREATE TRIGGER update_days_updated_at BEFORE UPDATE ON days
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DROP TRIGGER IF EXISTS update_progresses_updated_at ON progresses;
+CREATE TRIGGER update_progresses_updated_at BEFORE UPDATE ON progresses
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
-CREATE TRIGGER update_stories_updated_at
-  BEFORE UPDATE ON stories
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
-CREATE TRIGGER update_days_updated_at
-  BEFORE UPDATE ON days
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
-CREATE TRIGGER update_progresses_updated_at
-  BEFORE UPDATE ON progresses
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
--- Row Level Security (RLS)
-
+-- ---------------------------------------------------------------------
+-- Row Level Security
+-- Приложение работает с БД только с сервера через service role key.
+-- Публичный anon key может читать лишь опубликованный каталог.
+-- ---------------------------------------------------------------------
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stories ENABLE ROW LEVEL SECURITY;
@@ -159,101 +202,56 @@ ALTER TABLE choices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE progresses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE choice_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE purchases ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies
-
--- Users can read their own data
-CREATE POLICY "Users can read own data" ON users
-  FOR SELECT USING (auth.uid()::text = id::text);
-
--- Published stories are readable by everyone
+DROP POLICY IF EXISTS "Anyone can read published stories" ON stories;
 CREATE POLICY "Anyone can read published stories" ON stories
   FOR SELECT USING (status = 'published');
 
--- Published days are readable by everyone
+DROP POLICY IF EXISTS "Anyone can read published days" ON days;
 CREATE POLICY "Anyone can read published days" ON days
   FOR SELECT USING (status = 'published');
 
--- Scenes from published snapshots are readable
-CREATE POLICY "Anyone can read scenes from published days" ON scenes
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM days WHERE days.id = scenes.day_id AND days.status = 'published'
-    )
-  );
+-- Сцены, выборы и снапшоты — без публичного доступа:
+-- контент дня отдаётся только сервером после проверки доступа (платные пропуски).
 
--- Choices from published scenes are readable
-CREATE POLICY "Anyone can read choices from published scenes" ON choices
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM scenes 
-      JOIN days ON days.id = scenes.day_id 
-      WHERE scenes.id = choices.scene_id AND days.status = 'published'
-    )
-  );
-
--- Users can read/write their own progress
-CREATE POLICY "Users can manage own progress" ON progresses
-  FOR ALL USING (auth.uid()::text = user_id::text);
-
--- Users can insert their own choice events
-CREATE POLICY "Users can insert own choice events" ON choice_events
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
-
--- Published snapshots are readable by everyone
-CREATE POLICY "Anyone can read published snapshots" ON snapshots
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM days WHERE days.id = snapshots.day_id AND days.status = 'published'
-    )
-  );
-
--- Admin policies (using service role for admin operations)
--- Admins will use service role key to bypass RLS
-
--- Function to check if user is admin
+-- ---------------------------------------------------------------------
+-- Функции
+-- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION is_admin(user_uuid UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
-    SELECT 1 FROM admin_users 
-    WHERE user_id = user_uuid 
-    AND role IN ('editor', 'admin')
+    SELECT 1 FROM admin_users
+    WHERE user_id = user_uuid AND role IN ('editor', 'admin')
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- Function to get choice statistics for a scene
-CREATE OR REPLACE FUNCTION get_choice_stats(p_scene_id UUID)
-RETURNS TABLE (
-  choice_id UUID,
-  label TEXT,
-  count BIGINT,
-  percentage NUMERIC
-) AS $$
+-- Статистика выборов по сцене снапшота
+CREATE OR REPLACE FUNCTION get_choice_stats(p_scene_id TEXT)
+RETURNS TABLE (choice_id TEXT, count BIGINT) AS $$
+  SELECT ce.choice_id, COUNT(*)::BIGINT
+  FROM choice_events ce
+  WHERE ce.scene_id = p_scene_id
+  GROUP BY ce.choice_id;
+$$ LANGUAGE sql STABLE SET search_path = public;
+
+-- Атомарное списание бесплатного пропуска
+CREATE OR REPLACE FUNCTION consume_skip_credit(p_user_id UUID)
+RETURNS BOOLEAN AS $$
 DECLARE
-  total_count BIGINT;
+  updated INT;
 BEGIN
-  SELECT COUNT(*) INTO total_count
-  FROM choice_events
-  WHERE scene_id = p_scene_id;
-  
-  RETURN QUERY
-  SELECT 
-    c.id as choice_id,
-    c.label,
-    COALESCE(COUNT(ce.id), 0) as count,
-    CASE 
-      WHEN total_count > 0 THEN ROUND((COUNT(ce.id)::NUMERIC / total_count) * 100, 1)
-      ELSE 0
-    END as percentage
-  FROM choices c
-  LEFT JOIN choice_events ce ON ce.choice_id = c.id
-  WHERE c.scene_id = p_scene_id
-  GROUP BY c.id, c.label
-  ORDER BY c.sort_index;
+  UPDATE users SET skip_credits = skip_credits - 1
+  WHERE id = p_user_id AND skip_credits > 0;
+  GET DIAGNOSTICS updated = ROW_COUNT;
+  RETURN updated > 0;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public;
 
--- Insert sample admin user (replace with your Telegram ID after first login)
--- INSERT INTO admin_users (user_id, role) VALUES ('your-user-uuid', 'admin');
+-- Начисление бонуса за приглашённого друга
+CREATE OR REPLACE FUNCTION grant_skip_credit(p_user_id UUID, p_amount INT)
+RETURNS VOID AS $$
+  UPDATE users SET skip_credits = skip_credits + p_amount WHERE id = p_user_id;
+$$ LANGUAGE sql SET search_path = public;

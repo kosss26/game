@@ -1,19 +1,82 @@
-// Database types for Supabase
+// Database & domain types
 
 export type StoryStatus = "draft" | "published";
 export type DayStatus = "draft" | "published";
 export type AdminRole = "viewer" | "editor" | "admin";
-export type SceneType = "message" | "typing" | "pause" | "choice" | "input" | "system";
+export type SceneType =
+  | "message"
+  | "typing"
+  | "pause"
+  | "choice"
+  | "input"
+  | "system"
+  | "jump"
+  | "set"
+  | "end";
 export type Speaker = "npc" | "me" | "system";
+export type FlagValue = string | number | boolean;
+export type Flags = Record<string, FlagValue>;
+
+export interface Character {
+  name: string;
+  /** Hex-цвет имени/аватара */
+  color?: string;
+  /** 1–2 символа для аватара */
+  initials?: string;
+  /** Статус в шапке чата, например «в сети» */
+  status?: string;
+  /** Короткое описание для страницы истории */
+  bio?: string;
+}
+
+export interface Ending {
+  title: string;
+  description?: string;
+  /** Скрыта до получения */
+  secret?: boolean;
+}
+
+export interface StoryMeta {
+  tagline?: string;
+  /** Текст для кнопки «поделиться» */
+  share_text?: string;
+  genre?: string;
+  age_rating?: string;
+  accent?: string;
+  /** id персонажа, с которым ведётся чат по умолчанию */
+  main_character?: string;
+  characters?: Record<string, Character>;
+  endings?: Record<string, Ending>;
+  /** Флаг, в котором хранится id концовки */
+  ending_flag?: string;
+}
 
 export interface Story {
   id: string;
+  slug: string | null;
   title: string;
   description: string | null;
   cover_style: string | null;
   status: StoryStatus;
+  sort_order: number;
+  meta: StoryMeta | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface DayMeta {
+  background_style?: string;
+  recap_text?: string;
+  /** Тизер следующего дня на экране завершения */
+  teaser?: string;
+  /** Текст push-уведомления, когда этот день открывается */
+  push?: string;
+  /** Через сколько часов после завершения предыдущего дня открывается этот */
+  wait_hours?: number;
+  /** Исходный скрипт DSL (для повторного редактирования) */
+  script?: string;
+  /** Персонажи, объявленные в скрипте дня */
+  characters?: Record<string, Character>;
 }
 
 export interface Day {
@@ -29,9 +92,29 @@ export interface Day {
   updated_at: string;
 }
 
-export interface DayMeta {
-  background_style?: string;
-  recap_text?: string;
+export interface SceneMeta {
+  typing_delay?: number;
+  message_delay?: number;
+  pause_duration?: number;
+  /** Текст статуса во время паузы («Ася не в сети») */
+  pause_label?: string;
+  /** id персонажа (для type=message, speaker=npc) */
+  character?: string;
+  /** Условие (для jump) */
+  condition?: string;
+  /** Цель перехода (для jump) */
+  goto_tag?: string;
+  /** Пропустить N следующих сцен (для jump без цели, условные реплики) */
+  skip?: number;
+  /** Операции над флагами (для set): "trust += 1" */
+  ops?: string[];
+  /** Ключ флага для input */
+  input_key?: string;
+  input_placeholder?: string;
+  /** Текст подсказки над вариантами выбора */
+  prompt?: string;
+  /** id концовки (для end) */
+  ending?: string;
 }
 
 export interface Scene {
@@ -47,28 +130,35 @@ export interface Scene {
   created_at: string;
 }
 
-export interface SceneMeta {
-  typing_delay?: number;
-  message_delay?: number;
-  pause_duration?: number;
-  conditions?: FlagCondition[];
-  input_placeholder?: string;
-}
-
-export interface FlagCondition {
-  flag: string;
-  value: string | boolean;
-  operator: "eq" | "neq" | "exists";
-}
-
 export interface Choice {
   id: string;
   scene_id: string;
   label: string;
   goto_tag: string | null;
   goto_scene_id: string | null;
-  set_flags: Record<string, string | boolean> | null;
+  set_flags: Flags | null;
+  condition: string | null;
   sort_index: number;
+}
+
+/** Запись истории чата (что игрок уже видел) */
+export interface HistoryEntry {
+  /** id сцены снапшота, либо синтетический id ответа игрока */
+  id: string;
+  kind: "message" | "system" | "reply";
+  speaker: Speaker;
+  character?: string | null;
+  text: string;
+  /** время показа, ms epoch */
+  at: number;
+  /** Не отображается в чате (выбор-действие, служебная отметка) */
+  hidden?: boolean;
+}
+
+export interface ProgressState {
+  /** Ожидание: пауза до момента времени (ms epoch) */
+  pause_until?: number;
+  pause_label?: string;
 }
 
 export interface Progress {
@@ -77,19 +167,14 @@ export interface Progress {
   story_id: string;
   day_id: string;
   scene_id: string | null;
-  flags: Record<string, string | boolean>;
+  flags: Flags;
+  history: HistoryEntry[];
+  state: ProgressState;
+  snapshot_version: number | null;
   completed: boolean;
+  completed_at: string | null;
+  notified_at: string | null;
   updated_at: string;
-}
-
-export interface ChoiceEvent {
-  id: string;
-  user_id: string;
-  story_id: string;
-  day_id: string;
-  scene_id: string;
-  choice_id: string;
-  created_at: string;
 }
 
 export interface AdminUser {
@@ -110,6 +195,7 @@ export interface SnapshotData {
   day: Omit<Day, "id" | "created_at" | "updated_at">;
   scenes: SnapshotScene[];
   choices: SnapshotChoice[];
+  version?: number;
 }
 
 export interface SnapshotScene {
@@ -127,12 +213,13 @@ export interface SnapshotChoice {
   id: string;
   scene_id: string;
   label: string;
+  goto_tag?: string | null;
   goto_scene_id: string | null;
-  set_flags: Record<string, string | boolean> | null;
+  set_flags: Flags | null;
+  condition?: string | null;
   sort_index: number;
 }
 
-// User types
 export interface User {
   id: string;
   telegram_id: number;
@@ -140,32 +227,36 @@ export interface User {
   last_name: string | null;
   username: string | null;
   photo_url: string | null;
+  language_code?: string | null;
+  is_guest?: boolean;
+  referred_by?: string | null;
+  skip_credits?: number;
+  bot_blocked?: boolean;
+  meta?: { endings?: Record<string, string[]> } | null;
   created_at: string;
 }
 
-// Extended types for UI
-export interface StoryWithProgress extends Story {
+export type PurchaseProduct = "skip_day" | "season_pass";
+
+export interface Purchase {
+  id: string;
+  user_id: string;
+  story_id: string | null;
+  product: PurchaseProduct;
+  day_number: number | null;
+  stars: number;
+  source: "stars" | "credit" | "gift";
+  telegram_charge_id: string | null;
+  created_at: string;
+}
+
+export interface StoryWithDays extends Story {
   days: Day[];
-  current_progress?: Progress;
 }
 
-export interface DayWithScenes extends Day {
-  scenes: Scene[];
-  choices: Choice[];
-}
-
-// Analytics types
-export interface ChoiceStats {
+export interface ChoiceStat {
   choice_id: string;
   label: string;
   count: number;
   percentage: number;
-}
-
-export interface SceneDropoff {
-  scene_id: string;
-  sort_index: number;
-  reached_count: number;
-  left_count: number;
-  dropoff_rate: number;
 }

@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "./globals.css";
 import { TelegramProvider } from "@/lib/telegram/TelegramProvider";
 
 export const metadata: Metadata = {
-  title: "Story App - Интерактивные истории",
-  description: "Погрузись в захватывающие интерактивные истории",
+  title: "Полночь — истории в переписке",
+  description: "Интерактивные истории, которые происходят в чате. Каждый день — новая глава, ваши ответы меняют финал.",
+  robots: { index: false },
 };
 
 export const viewport: Viewport = {
@@ -13,22 +15,15 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
+  themeColor: "#090a0f",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ru">
-      <head>
-        <script src="https://telegram.org/js/telegram-web-app.js" async />
-      </head>
       <body className="antialiased">
-        <TelegramProvider>
-          {children}
-        </TelegramProvider>
+        <Script src="https://telegram.org/js/telegram-web-app.js?57" strategy="beforeInteractive" />
+        <TelegramProvider>{children}</TelegramProvider>
       </body>
     </html>
   );

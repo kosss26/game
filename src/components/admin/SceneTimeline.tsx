@@ -70,12 +70,12 @@ export function SceneTimeline({ day: _day, scenes, choices }: SceneTimelineProps
               
               {scene.speaker && (
                 <span className="text-xs text-tg-accent">
-                  {scene.speaker.toUpperCase()}
+                  {scene.meta?.character || scene.speaker.toUpperCase()}
                 </span>
               )}
               
               <span className="flex-1 text-sm text-tg-text truncate">
-                {scene.text || getTypePlaceholder(scene.type)}
+                {scene.text || describe(scene) || getTypePlaceholder(scene.type)}
               </span>
               
               {scene.tag && (
@@ -176,6 +176,12 @@ function getTypeColor(type: Scene["type"]): string {
       return "bg-green-500/20 text-green-400";
     case "input":
       return "bg-purple-500/20 text-purple-400";
+    case "jump":
+      return "bg-pink-500/20 text-pink-300";
+    case "set":
+      return "bg-yellow-500/20 text-yellow-300";
+    case "end":
+      return "bg-red-500/20 text-red-300";
     default:
       return "bg-tg-bg text-tg-text-secondary";
   }
@@ -195,6 +201,12 @@ function getTypeLabel(type: Scene["type"]): string {
       return "выбор";
     case "input":
       return "ввод";
+    case "jump":
+      return "переход";
+    case "set":
+      return "флаги";
+    case "end":
+      return "конец";
     default:
       return type;
   }
@@ -209,4 +221,16 @@ function getTypePlaceholder(type: Scene["type"]): string {
     default:
       return "";
   }
+}
+
+function describe(scene: Scene): string {
+  const m = scene.meta || {};
+  if (scene.type === "jump") {
+    const target = m.goto_tag ? `→ ${m.goto_tag}` : m.skip ? `пропустить ${m.skip}` : "проход";
+    return m.condition ? `если ${m.condition} ${target}` : target;
+  }
+  if (scene.type === "set") return (m.ops || []).join(", ");
+  if (scene.type === "end") return m.ending ? `концовка: ${m.ending}` : "конец дня";
+  if (scene.type === "pause") return `${Math.round((m.pause_duration || 0) / 1000)} с${m.pause_label ? ` · ${m.pause_label}` : ""}`;
+  return "";
 }
