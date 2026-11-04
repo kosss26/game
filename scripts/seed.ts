@@ -12,20 +12,25 @@ import { loadContent } from "@/lib/content/loader";
 import { importDayScript, publishDaySnapshot, parseDayScript } from "@/lib/content/importer";
 import type { Day, Story } from "@/lib/types/database";
 
-async function getClient(): Promise<{ client: SupabaseClient; local: boolean }> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+async function getClient(): Promise<{ client: SupabaseClient; local: boolean; label: string }> {
+  const forced = process.env.DATA_SOURCE;
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (url && key && process.env.DATA_SOURCE !== "local") {
-    return { client: createClient(url, key, { auth: { persistSession: false } }), local: false };
+  if (forced !== "local" && forced !== "supabase" && process.env.DATABASE_URL) {
+    const { createPostgresClient } = await import("@/lib/db/postgres");
+    return { client: createPostgresClient() as unknown as SupabaseClient, local: false, label: "PostgreSQL (DATABASE_URL)" };
+  }
+  if (forced !== "local" && url && key) {
+    return { client: createClient(url, key, { auth: { persistSession: false } }), local: false, label: "Supabase" };
   }
   const { createLocalClient } = await import("@/lib/db/local");
-  return { client: createLocalClient() as unknown as SupabaseClient, local: true };
+  return { client: createLocalClient() as unknown as SupabaseClient, local: true, label: "Локальная демо-база (.data/local-db.json)" };
 }
 
 async function main() {
   const draft = process.argv.includes("--draft");
-  const { client, local } = await getClient();
-  console.log(local ? "→ Локальная демо-база (.data/local-db.json)" : "→ Supabase");
+  const { client, local, label } = await getClient();
+  console.log(`→ ${label}`);
 
   const stories = loadContent();
   if (stories.length === 0) {
@@ -98,6 +103,10 @@ async function main() {
   }
 
   if (local) await new Promise(r => setTimeout(r, 300)); // дождаться записи файла
+  if (!local && label.startsWith("PostgreSQL")) {
+    const { getPool } = await import("@/lib/db/postgres");
+    await getPool().end();
+  }
   console.log("\nГотово.");
 }
 

@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable experimental features for better Telegram MiniApp support
+  // Самодостаточная сборка для Docker / своего сервера (.next/standalone)
+  output: "standalone",
+  serverExternalPackages: ["pg"],
+  poweredByHeader: false,
   experimental: {
     serverActions: {
       bodySizeLimit: "2mb",

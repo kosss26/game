@@ -12,11 +12,13 @@
     "test:watch": "jest --watch",
     "seed": "node --env-file-if-exists=.env.local --import tsx scripts/seed.ts",
     "bot:setup": "node --env-file-if-exists=.env.local --import tsx scripts/bot-setup.ts",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.0",
     "next": "^15.1.0",
+    "pg": "^8.23.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1"
@@ -24,6 +26,7 @@
   "devDependencies": {
     "@types/jest": "^29.5.0",
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.0",

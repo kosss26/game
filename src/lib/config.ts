@@ -1,14 +1,24 @@
 import "server-only";
 import crypto from "crypto";
 
+/**
+ * Чтение переменной в рантайме. Динамический доступ не даёт Next.js «вшить»
+ * значение при сборке — один Docker-образ работает с любым .env.
+ * Поддерживаются и старые имена NEXT_PUBLIC_*.
+ */
+function env(name: string): string {
+  const e = process.env as Record<string, string | undefined>;
+  return e[name] || e[`NEXT_PUBLIC_${name}`] || "";
+}
+
 /** Серверная конфигурация из переменных окружения */
 export const config = {
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  supabaseUrl: env("SUPABASE_URL"),
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   botToken: process.env.TELEGRAM_BOT_TOKEN || "",
-  botUsername: (process.env.NEXT_PUBLIC_BOT_USERNAME || "").replace(/^@/, ""),
-  appShortName: process.env.NEXT_PUBLIC_APP_SHORT_NAME || "",
-  appUrl: (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, ""),
+  botUsername: env("BOT_USERNAME").replace(/^@/, ""),
+  appShortName: env("APP_SHORT_NAME"),
+  appUrl: env("APP_URL").replace(/\/$/, ""),
   webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || "",
   cronSecret: process.env.CRON_SECRET || "",
   adminPassword: process.env.ADMIN_PASSWORD || "",
@@ -26,9 +36,23 @@ export const config = {
   defaultWaitHours: parseFloat(process.env.DEFAULT_WAIT_HOURS || "12"),
 };
 
-/** Используется ли локальная демо-база вместо Supabase */
+export type DbKind = "postgres" | "supabase" | "local";
+
+/**
+ * Источник данных. Приоритет: DATA_SOURCE (явно) → DATABASE_URL (свой Postgres)
+ * → Supabase → локальная демо-база.
+ */
+export function dbKind(): DbKind {
+  const forced = process.env.DATA_SOURCE;
+  if (forced === "local" || forced === "postgres" || forced === "supabase") return forced;
+  if (process.env.DATABASE_URL) return "postgres";
+  if (config.supabaseUrl && config.supabaseServiceKey) return "supabase";
+  return "local";
+}
+
+/** Используется ли локальная демо-база */
 export function isLocalDb(): boolean {
-  return !config.supabaseUrl || !config.supabaseServiceKey || process.env.DATA_SOURCE === "local";
+  return dbKind() === "local";
 }
 
 let cachedSecret: Buffer | null = null;

@@ -27,7 +27,7 @@
 
 ## Стек
 
-Next.js 15 (App Router, server actions), React 19, TypeScript, Tailwind, Supabase (Postgres), Telegram Bot API.
+Next.js 15 (App Router, server actions), React 19, TypeScript, Tailwind, PostgreSQL, Telegram Bot API.
 
 ## Быстрый старт (без настроек)
 
@@ -37,31 +37,76 @@ npm run seed      # загрузит «Тихий час» в локальную
 npm run dev       # http://localhost:3000
 ```
 
-Без переменных Supabase приложение работает на локальной JSON-базе. Студия `/admin` в dev-режиме открыта, если не задан `ADMIN_PASSWORD`. Локальная база рассчитана на один процесс-писатель и предназначена только для разработки.
+Без настроек базы приложение работает на локальной JSON-базе. Она рассчитана только на разработку. Студия `/admin` в dev-режиме открыта, если не задан `ADMIN_PASSWORD`.
 
-## Продакшн
+## База данных
 
-### 1. База данных
-1. Создайте проект на [supabase.com](https://supabase.com).
-2. В SQL Editor выполните `supabase/schema.sql`.
-   - Если база уже создана старой версией: выполните `supabase/migrations/002_release_v1.sql`. Миграцию можно запускать повторно.
-3. Заполните `NEXT_PUBLIC_SUPABASE_URL` и `SUPABASE_SERVICE_ROLE_KEY`.
+Приложение выбирает источник данных автоматически:
 
-### 2. Бот и Mini App
-1. Создайте бота в [@BotFather](https://t.me/BotFather), затем выполните `/newapp`: это даст короткое имя для ссылок `t.me/<bot>/<app>`.
-2. Включите платежи в Stars: специальный провайдер не нужен, валюта — `XTR`.
-3. Скопируйте `.env.example` в `.env.local` и заполните значения.
+| Переменные | База |
+|---|---|
+| `DATABASE_URL` | свой PostgreSQL 14+ — **рекомендуется** |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Supabase |
+| ничего | локальная демо-база (только разработка) |
 
-### 3. Деплой (Vercel)
-1. Импортируйте репозиторий и добавьте переменные из `.env.example`.
-2. После деплоя локально, с заполненным `.env.local`, выполните:
-   ```bash
-   npm run seed        # загрузить и опубликовать истории из content/
-   npm run bot:setup   # webhook, команды, кнопка меню, описание бота
-   ```
-3. Уведомления: `vercel.json` запускает `/api/cron/notify` каждые 30 минут.
-   - Частые cron-запуски на Vercel доступны на тарифе Pro.
-   - На бесплатном тарифе подойдёт любой внешний планировщик (например, cron-job.org) с заголовком `Authorization: Bearer $CRON_SECRET`.
+Код запросов одинаковый для всех вариантов. Схема — `supabase/schema.sql`, обычный PostgreSQL без зависимостей от Supabase. Она применяется командой `npm run db:migrate`, а в Docker — автоматически при каждом старте; повторный запуск безопасен.
+
+Если база создана старой версией (v0.1), сначала выполните `supabase/migrations/002_release_v1.sql`.
+
+## Деплой на свой сервер (Docker) — рекомендуется
+
+**Нужно:** VPS с Docker (от 1 vCPU / 1 ГБ RAM, Ubuntu 22.04+) и домен, A-запись которого указывает на IP сервера. HTTPS обязателен для Telegram Mini App — сертификат выпустит Caddy автоматически.
+
+```bash
+git clone <repo> polnoch && cd polnoch
+cp deploy/.env.example .env
+nano .env                                    # домен, токен бота, пароли и секреты
+
+docker compose up -d --build                 # Postgres + приложение + HTTPS + уведомления + бэкапы
+docker compose run --rm tools npm run seed   # загрузить и опубликовать «Тихий час»
+docker compose run --rm tools npm run bot:setup   # webhook, меню, команды бота
+```
+
+Готово: откройте бота в Telegram и нажмите «Истории».
+
+Что поднимается:
+
+| Сервис | Назначение |
+|---|---|
+| `db` | PostgreSQL 16; данные в томе `pgdata` |
+| `app` | приложение; при старте применяет схему |
+| `caddy` | HTTPS (Let's Encrypt) и проксирование на приложение |
+| `cron` | каждые 15 минут рассылает уведомления «открылся новый день» |
+| `backup` | ежедневный `pg_dump` в `deploy/backups/`; хранятся 14 последних |
+
+Полезные команды:
+
+```bash
+docker compose logs -f app                       # логи
+git pull && docker compose up -d --build         # обновление
+docker compose run --rm tools npm run seed       # после правок в content/
+docker compose exec db psql -U polnoch           # консоль БД
+# Восстановление из бэкапа:
+docker compose exec -T db pg_restore -U polnoch -d polnoch --clean < deploy/backups/polnoch-2026-11-04.dump
+```
+
+**Без Docker.** Нужны Node.js 22, PostgreSQL и любой reverse proxy с HTTPS (nginx или Caddy):
+
+```bash
+npm ci && npm run build
+npm run db:migrate && npm run seed && npm run bot:setup
+node .next/standalone/server.js      # нужны также .next/static → .next/standalone/.next/static
+```
+
+Процессом удобно управлять через systemd или pm2. Для уведомлений добавьте в crontab: `*/15 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<домен>/api/cron/notify`.
+
+### Настройка бота
+1. Создайте бота в [@BotFather](https://t.me/BotFather), затем выполните `/newapp` и укажите URL приложения. Короткое имя приложения впишите в `APP_SHORT_NAME`.
+2. Платежи в Stars работают без дополнительной настройки: валюта `XTR`, провайдер не нужен.
+3. `npm run bot:setup` настроит webhook, кнопку меню, команды и описание бота.
+
+### Деплой на Vercel + Supabase (альтернатива)
+Добавьте переменные из `.env.example` в настройки проекта. `vercel.json` запускает cron каждые 30 минут: на Vercel это требует тарифа Pro, на бесплатном используйте внешний планировщик.
 
 ### Администраторы
 - В браузере: `/admin/login` и `ADMIN_PASSWORD`.
@@ -113,10 +158,11 @@ src/
 │   ├── actions/              server actions: player, admin, auth
 │   ├── auth/                 подписанные HMAC-сессии, проверка Telegram initData
 │   ├── content/              импорт/публикация, загрузчик content/
-│   └── db/local.ts           локальная демо-база, совместимая с supabase-js
+│   └── db/                   адаптеры БД: postgres.ts (свой Postgres), local.ts (демо)
 content/stories/              истории
-supabase/                     схема и миграции
-scripts/                      seed, bot-setup
+supabase/                     схема (обычный PostgreSQL) и миграции
+scripts/                      seed, bot-setup, migrate
+deploy/, docker-compose.yml   развёртывание на своём сервере
 ```
 
 ### Безопасность
@@ -126,7 +172,7 @@ scripts/                      seed, bot-setup
 - Контент дня отдаётся только после проверки доступа, поэтому платный пропуск нельзя обойти через URL.
 - Сохранять прогресс можно только по «билету», который сервер выдал при открытии дня. Входные данные ограничены по размеру.
 - Webhook проверяет `X-Telegram-Bot-Api-Secret-Token`. Выдача покупок идемпотентна по `telegram_payment_charge_id`.
-- RLS включён на всех таблицах. Публичный anon-ключ видит только опубликованный каталог.
+- БД доступна только серверу приложения: в Docker Postgres не публикуется наружу. Для Supabase включён RLS.
 
 ## Команды
 
@@ -135,6 +181,7 @@ scripts/                      seed, bot-setup
 | `npm run dev` | Режим разработки |
 | `npm run build && npm start` | Продакшн-сборка |
 | `npm run check` | Типы, линтер и тесты |
+| `npm run db:migrate` | Применить схему к `DATABASE_URL` |
 | `npm run seed` | Загрузить и опубликовать `content/` (`-- --draft` — без публикации) |
 | `npm run bot:setup` | Настроить бота |
 
@@ -143,7 +190,7 @@ scripts/                      seed, bot-setup
 - [ ] Согласовать `/legal` с юристом и указать реальные контакты поддержки.
 - [ ] Задать в продакшне `SESSION_SECRET`, `ADMIN_PASSWORD`, `TELEGRAM_WEBHOOK_SECRET` и `CRON_SECRET`.
 - [ ] Проверить тестовую оплату Stars на тестовом сервере Telegram.
-- [ ] Включить бэкапы Supabase.
+- [ ] Проверить, что бэкапы появляются в `deploy/backups/`, и периодически копировать их за пределы сервера.
 
 ## Лицензия
 

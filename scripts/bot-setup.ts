@@ -1,11 +1,11 @@
 /**
  * Настройка бота: webhook, команды, кнопка меню Mini App, описание.
  *   npm run bot:setup
- * Требуются TELEGRAM_BOT_TOKEN, NEXT_PUBLIC_APP_URL, TELEGRAM_WEBHOOK_SECRET.
+ * Требуются TELEGRAM_BOT_TOKEN, APP_URL, TELEGRAM_WEBHOOK_SECRET.
  */
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+const appUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
 const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
 
 async function call(method: string, params: Record<string, unknown>) {
@@ -21,7 +21,7 @@ async function call(method: string, params: Record<string, unknown>) {
 
 async function main() {
   if (!token || !appUrl || !secret) {
-    console.error("Нужны TELEGRAM_BOT_TOKEN, NEXT_PUBLIC_APP_URL и TELEGRAM_WEBHOOK_SECRET (в .env.local)");
+    console.error("Нужны TELEGRAM_BOT_TOKEN, APP_URL и TELEGRAM_WEBHOOK_SECRET (в .env.local)");
     process.exit(1);
   }
   if (!/^[A-Za-z0-9_-]{16,256}$/.test(secret)) {
