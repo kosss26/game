@@ -192,3 +192,7 @@ git -C /opt/polnoch-stories pull --ff-only && python3 /opt/polnoch-stories/scrip
 ```bash
 python3 scripts/test-cloudflare-deploy.py
 ```
+
+Проверка `getMe` в установщике выполняется через `curl`: на этом VPS Python urllib
+получает HTTP 403 даже на корневом адресе Worker. URL с токеном и заголовок
+секрета передаются curl через stdin, без временных файлов и без секретов в argv.

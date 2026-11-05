@@ -170,47 +170,53 @@ def new_bindings(values):
     ]
 
 
+def relay_get_me(values):
+    # This VPS reaches the Worker with curl, while urllib receives 403 even at /.
+    # Keep the bot token and relay secret off argv and disk: curl reads them via stdin.
+    config = '\n'.join([
+        'url = ' + json.dumps(BASE + '/bot' + values['TELEGRAM_BOT_TOKEN'] + '/getMe'),
+        'header = ' + json.dumps('X-Relay-Secret: ' + values['TELEGRAM_RELAY_SECRET']),
+    ]) + '\n'
+    try:
+        response = subprocess.run([
+            'curl', '--config', '-', '--silent', '--show-error', '--max-time', '20',
+            '--proto', '=https', '--request', 'POST', '--header', 'Content-Type: application/json',
+            '--data', '{}', '--write-out', '\n%{http_code}',
+        ], input=config, text=True, capture_output=True, timeout=25)
+    except (OSError, subprocess.TimeoutExpired):
+        return 0, b''
+    if response.returncode:
+        return 0, b''
+    body, separator, status = response.stdout.rpartition('\n')
+    if not separator or not status.isdigit():
+        return 0, b''
+    return int(status), body.encode()
+
+
 def verify_bot(values):
-    req = urllib.request.Request(BASE + '/bot' + values['TELEGRAM_BOT_TOKEN'] + '/getMe', data=b'{}', headers={
-        'Content-Type': 'application/json', 'X-Relay-Secret': values['TELEGRAM_RELAY_SECRET'],
-    }, method='POST')
     reason = 'нет ответа'
     expected = values['BOT_USERNAME'].lstrip('@')
     safe_username = lambda name: name if re.fullmatch(r'[A-Za-z0-9_]{1,64}', name) else '(не распознан)'
     for attempt in range(6):
-        try:
-            with urllib.request.urlopen(req, timeout=20) as response:
-                result = json.load(response)
-            if result.get('ok'):
-                actual = str(result.get('result', {}).get('username', ''))
-                if actual.lower() == expected.lower():
-                    return
-                raise DeploymentError(f"Токен принят, но username не совпадает: в настройках @{safe_username(expected)}, Telegram вернул @{safe_username(actual)}. Worker будет восстановлен.")
-            code = result.get('error_code')
-            reason = f'Telegram API code {code}' if type(code) is int else 'ответ без ok=true'
-        except urllib.error.HTTPError as error:
-            reason = f'HTTP {error.code}'
+        status, body = relay_get_me(values)
+        reason = f'HTTP {status}' if status else 'нет соединения или истекло время ожидания'
+        if status:
             try:
-                payload = json.loads(error.read(8192))
-                code = payload.get('error_code')
+                result = json.loads(body)
+                if 200 <= status < 300 and result.get('ok'):
+                    actual = str(result.get('result', {}).get('username', ''))
+                    if actual.lower() == expected.lower():
+                        return
+                    raise DeploymentError(f"Токен принят, но username не совпадает: в настройках @{safe_username(expected)}, Telegram вернул @{safe_username(actual)}. Worker будет восстановлен.")
+                code = result.get('error_code')
                 if type(code) is int:
                     reason += f', Telegram API code {code}'
-            except (ValueError, AttributeError):
-                pass
-        except (urllib.error.URLError, TimeoutError):
-            reason = 'нет соединения или истекло время ожидания'
-        except (ValueError, KeyError, AttributeError):
-            reason = 'ответ не является ожидаемым Telegram JSON'
+            except (ValueError, KeyError, AttributeError):
+                if status == 403 and body.strip() == b'forbidden':
+                    reason += ', Worker отклонил секрет доступа'
         if attempt < 5:
             time.sleep(3)
-    hints = {
-        'HTTP 403': 'реле отклонило секрет доступа',
-        'HTTP 404': 'маршрут нового бота не найден или ещё не распространился',
-        'HTTP 401': 'Telegram не принял токен бота',
-        'HTTP 530': 'ошибка DNS или конфигурации Cloudflare',
-    }
-    hint = next((text for prefix, text in hints.items() if reason.startswith(prefix)), 'нужна проверка по указанному коду')
-    raise DeploymentError(f'getMe через реле: {reason}; {hint}.')
+    raise DeploymentError(f'getMe через реле (curl): {reason}.')
 
 
 def deploy(client, values, source, backup):

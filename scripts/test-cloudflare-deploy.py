@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """No network requests: validate binding preservation, backup and rollback."""
 import copy
-import io
-import urllib.error
 import importlib.util
 import json
 import pathlib
@@ -59,18 +57,36 @@ class DeploymentTests(unittest.TestCase):
 
     def test_bot_username_mismatch_is_reported_without_token(self):
         payload = json.dumps({'ok': True, 'result': {'username': 'actual_bot'}}).encode()
-        with patch.object(d.urllib.request, 'urlopen', return_value=io.BytesIO(payload)):
+        with patch.object(d, 'relay_get_me', return_value=(200, payload)):
             with self.assertRaises(d.DeploymentError) as caught: d.verify_bot(VALUES)
         self.assertIn('@actual_bot', str(caught.exception))
         self.assertIn('@stories_bot', str(caught.exception))
         self.assertNotIn(VALUES['TELEGRAM_BOT_TOKEN'], str(caught.exception))
 
     def test_bot_http_error_is_reported_without_response_body(self):
-        error = urllib.error.HTTPError('https://relay.invalid', 403, 'Forbidden', {}, io.BytesIO(b'private'))
-        with patch.object(d.urllib.request, 'urlopen', side_effect=error), patch.object(d.time, 'sleep'):
+        with patch.object(d, 'relay_get_me', return_value=(403, b'private')), patch.object(d.time, 'sleep'):
             with self.assertRaises(d.DeploymentError) as caught: d.verify_bot(VALUES)
         self.assertIn('HTTP 403', str(caught.exception))
         self.assertNotIn('private', str(caught.exception))
+
+    def test_curl_receives_credentials_only_on_stdin(self):
+        response = d.subprocess.CompletedProcess([], 0, '{"ok":true,"result":{"username":"stories_bot"}}\n200', '')
+        with patch.object(d.subprocess, 'run', return_value=response) as run:
+            d.verify_bot(VALUES)
+        args, options = run.call_args
+        command = args[0]
+        self.assertEqual(command[0], 'curl')
+        self.assertNotIn(VALUES['TELEGRAM_BOT_TOKEN'], ' '.join(command))
+        self.assertNotIn(VALUES['TELEGRAM_RELAY_SECRET'], ' '.join(command))
+        self.assertIn(VALUES['TELEGRAM_BOT_TOKEN'], options['input'])
+        self.assertIn(VALUES['TELEGRAM_RELAY_SECRET'], options['input'])
+        self.assertNotIn('--location', command)
+        self.assertEqual(options['timeout'], 25)
+
+    def test_curl_failure_does_not_expose_stderr(self):
+        response = d.subprocess.CompletedProcess([], 1, '', 'private_fixture')
+        with patch.object(d.subprocess, 'run', return_value=response):
+            self.assertEqual(d.relay_get_me(VALUES), (0, b''))
 
     def test_multipart_backup_parser(self):
         source = b'export default {fetch(){}};'
