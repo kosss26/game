@@ -183,8 +183,149 @@ function Mystery() {
   );
 }
 
+function Winter() {
+  const r = rng(91);
+  return (
+    <>
+      <defs>
+        <linearGradient id="wsky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#0c1118" />
+          <stop offset="0.6" stopColor="#1f2c3c" />
+          <stop offset="1" stopColor="#3a4a5c" />
+        </linearGradient>
+        <linearGradient id="wice" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#8d9fb3" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#d9e3ee" stopOpacity="0.9" />
+        </linearGradient>
+        <radialGradient id="wwin" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#ffd48a" stopOpacity="0.95" />
+          <stop offset="1" stopColor="#ffd48a" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="wlamp" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#bfe3ff" stopOpacity="0.5" />
+          <stop offset="1" stopColor="#bfe3ff" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <rect width="400" height="320" fill="url(#wsky)" />
+      {/* дальний берег */}
+      <path d={forestRow(41, 172, 22, 44, 14)} fill="#2a3746" />
+      {/* дом на холме */}
+      <g>
+        <path d="M58 150 L120 112 L182 150 Z" fill="#141b25" />
+        <rect x="70" y="148" width="100" height="44" fill="#18212d" />
+        <rect x="112" y="122" width="16" height="12" fill="#ffd48a" opacity="0.9" />
+        <circle cx="120" cy="128" r="22" fill="url(#wwin)" />
+        <rect x="84" y="160" width="12" height="14" fill="#2b3644" />
+        <rect x="144" y="160" width="12" height="14" fill="#2b3644" />
+        <path d="M58 150 L120 112 L182 150" fill="none" stroke="#dfe8f2" strokeWidth="3" opacity="0.85" />
+      </g>
+      {/* лёд */}
+      <path d="M0 205 Q200 190 400 205 V320 H0 Z" fill="url(#wice)" />
+      {/* лодочный сарай и мостки */}
+      <g>
+        <rect x="258" y="176" width="70" height="36" fill="#111821" />
+        <path d="M250 178 L293 156 L336 178 Z" fill="#0d131b" />
+        <path d="M250 178 L293 156 L336 178" fill="none" stroke="#e6eef6" strokeWidth="2.5" opacity="0.9" />
+        <rect x="286" y="190" width="14" height="22" fill="#05080c" />
+        <rect x="322" y="206" width="60" height="4" fill="#0f151d" />
+        <circle cx="292" cy="200" r="30" fill="url(#wlamp)" />
+      </g>
+      {/* тропинка следов */}
+      {Array.from({ length: 9 }, (_, i) => (
+        <ellipse key={i} cx={160 + i * 12 + (i % 2) * 4} cy={196 + i * 1.6} rx="2.2" ry="1.2" fill="#55657a" opacity="0.7" />
+      ))}
+      <path d={forestRow(63, 320, 70, 130, 30)} fill="#070a0f" />
+      {/* снег */}
+      {Array.from({ length: 130 }, (_, i) => (
+        <circle key={i} cx={r() * 400} cy={r() * 320} r={0.6 + r() * 1.6} fill="white" opacity={0.35 + r() * 0.5} />
+      ))}
+    </>
+  );
+}
+
+function Aurora() {
+  const r = rng(77);
+  return (
+    <>
+      <defs>
+        <linearGradient id="asky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#050812" />
+          <stop offset="0.55" stopColor="#0d1a2b" />
+          <stop offset="1" stopColor="#14263a" />
+        </linearGradient>
+        <linearGradient id="aur1" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#3cf2a5" stopOpacity="0" />
+          <stop offset="0.3" stopColor="#3cf2a5" stopOpacity="0.55" />
+          <stop offset="0.7" stopColor="#6ad7ff" stopOpacity="0.45" />
+          <stop offset="1" stopColor="#b48cff" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="aur2" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.9" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </linearGradient>
+        <mask id="aurm">
+          <rect width="400" height="320" fill="url(#aur2)" />
+        </mask>
+        <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#0b1624" />
+          <stop offset="1" stopColor="#04070c" />
+        </linearGradient>
+        <radialGradient id="lamp" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#ffcf7a" stopOpacity="0.85" />
+          <stop offset="1" stopColor="#ffcf7a" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <rect width="400" height="320" fill="url(#asky)" />
+      <Stars seed={13} count={70} maxY={150} />
+      {/* северное сияние */}
+      <g mask="url(#aurm)">
+        <path d="M-20 70 C 60 20, 120 120, 200 60 S 330 10, 420 80 L420 140 C 330 70, 260 150, 190 110 S 60 80, -20 130 Z" fill="url(#aur1)" opacity="0.8" />
+        <path d="M-20 40 C 80 90, 150 10, 230 50 S 360 90, 420 30 L420 70 C 340 120, 260 40, 200 90 S 60 30, -20 80 Z" fill="url(#aur1)" opacity="0.45" />
+        {Array.from({ length: 26 }, (_, i) => (
+          <rect key={i} x={i * 16 + r() * 6} y={30 + r() * 30} width="2" height={40 + r() * 60} fill="#7affc8" opacity={0.12 + r() * 0.15} />
+        ))}
+      </g>
+      {/* особняк */}
+      <g>
+        <rect x="40" y="150" width="250" height="90" fill="#0a111c" />
+        <rect x="120" y="128" width="90" height="24" fill="#0a111c" />
+        <path d="M112 130 L165 108 L218 130 Z" fill="#08101a" />
+        {Array.from({ length: 9 }, (_, i) =>
+          [160, 192].map(y => {
+            const lit = (i === 3 && y === 160) || (i === 4 && y === 160) || (i === 5 && y === 160) || r() > 0.82;
+            return <rect key={`${i}-${y}`} x={52 + i * 26} y={y} width="12" height="20" rx="1" fill={lit ? "#ffcf7a" : "#16233a"} opacity={lit ? 0.92 : 1} />;
+          })
+        )}
+        <circle cx="165" cy="170" r="42" fill="url(#lamp)" opacity="0.45" />
+      </g>
+      <path d="M290 160 h80 v80 h-80z" fill="#070d16" />
+      {/* набережная и фонари */}
+      <rect x="0" y="238" width="400" height="6" fill="#1b2a3c" />
+      {[30, 120, 210, 300, 380].map(x => (
+        <g key={x}>
+          <rect x={x} y="214" width="2" height="24" fill="#2b3a4d" />
+          <circle cx={x + 1} cy="213" r="2.5" fill="#ffd38a" />
+          <circle cx={x + 1} cy="213" r="12" fill="url(#lamp)" opacity="0.6" />
+        </g>
+      ))}
+      {/* вода и отражения */}
+      <rect x="0" y="244" width="400" height="76" fill="url(#water)" />
+      {Array.from({ length: 34 }, (_, i) => {
+        const x = r() * 400;
+        const y = 250 + r() * 66;
+        const warm = r() > 0.55;
+        return <rect key={i} x={x} y={y} width={8 + r() * 30} height="1.4" fill={warm ? "#ffcf7a" : "#5fe0b0"} opacity={0.15 + r() * 0.3} />;
+      })}
+      {/* мост */}
+      <path d="M250 244 Q 330 200 410 244" fill="none" stroke="#1d2d40" strokeWidth="8" />
+    </>
+  );
+}
+
 const STYLES: Record<string, () => React.JSX.Element> = {
   forest: Forest,
+  winter: Winter,
+  aurora: Aurora,
   noir: Noir,
   romance: Romance,
   thriller: Thriller,

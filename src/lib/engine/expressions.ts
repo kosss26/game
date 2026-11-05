@@ -306,8 +306,14 @@ export function applyChoiceFlags(flags: Flags, setFlags: Flags | null | undefine
   return next;
 }
 
-/** Подстановка {flag} в текст */
+/**
+ * Подстановка в текст:
+ *  {name}            — значение флага
+ *  {спал|спала}      — форма по роду игрока (флаг gender = "f" → вторая)
+ */
 export function interpolate(text: string, flags: Flags): string {
+  const fem = flags.gender === "f";
+  text = text.replace(/\{([^{}|]*)\|([^{}|]*)\}/g, (_w, m: string, f: string) => (fem ? f : m));
   return text.replace(/\{([\p{L}_][\p{L}\p{N}_.]*)\}/gu, (whole, key: string) => {
     const v = flags[key];
     if (v === undefined || v === null || v === "") return whole === "{name}" ? "незнакомец" : "";

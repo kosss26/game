@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Character, Flags, HistoryEntry, ProgressState, SnapshotChoice, SnapshotData } from "@/lib/types/database";
+import type { Character, ChatConfig, Flags, HistoryEntry, ProgressState, SnapshotChoice, SnapshotData, SnapshotScene, StoryMeta } from "@/lib/types/database";
 import { applyChoice, applyInput, buildRuntime, isActionChoice, nextAfter, resolve, stripAction, type Step } from "@/lib/engine/runtime";
 import { saveProgress, recordChoice, completeDay } from "@/lib/actions/player";
 import { useApp, useBackButton, type Speed } from "@/lib/telegram/TelegramProvider";
-import { MessageList, TypingBubble, DayDivider } from "./Messages";
+import { MessageList, TypingBubble, DayDivider, previewText } from "./Messages";
+import { ThreadTabs, ClueSheet, Toast, MeterBar, type ToastData } from "./ChatChrome";
 import { ChoicePanel, InputPanel, PausePanel, IdleComposer } from "./Composer";
 import { Avatar } from "@/components/ui/Avatar";
 import { Icon } from "@/components/ui/Icon";
@@ -19,6 +20,7 @@ export interface ChatPlayerProps {
   snapshot: SnapshotData;
   characters: Record<string, Character>;
   mainCharacter?: string;
+  storyMeta?: StoryMeta;
   initial: {
     history: HistoryEntry[];
     flags: Flags;
@@ -37,19 +39,29 @@ type InputStep = Extract<Step, { kind: "input" }>;
 
 type Ui =
   | { kind: "running" }
-  | { kind: "typing"; who: string }
+  | { kind: "typing"; who: string; thread: string }
   | { kind: "choice"; step: ChoiceStep }
   | { kind: "input"; step: InputStep }
   | { kind: "pause"; sceneId: string; until: number; total: number; label: string }
   | { kind: "ended" };
 
 const SPEED: Record<Speed, number> = { normal: 1, fast: 0.45, instant: 0 };
+const MAIN = "main";
+
+const threadOf = (scene: SnapshotScene | undefined | null) => scene?.meta?.thread || MAIN;
+
+export function foundClues(flags: Flags, meta?: StoryMeta): string[] {
+  return Object.keys(meta?.clues || {}).filter(id => {
+    const v = flags[`clue_${id}`];
+    return v !== undefined && v !== false && v !== 0 && v !== "";
+  });
+}
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 export function ChatPlayer(props: ChatPlayerProps) {
   const { storyId, dayId, dayNumber, dayTitle, version, snapshot, characters, preview, onExit, onComplete } = props;
-  const { token, haptic, speed, setSpeed, webApp } = useApp();
+  const { token, haptic, speed, setSpeed, timers, setTimers, webApp } = useApp();
   const rt = useMemo(() => buildRuntime(snapshot), [snapshot]);
 
   const defaultCharacter = useMemo(() => {
@@ -68,10 +80,37 @@ export function ChatPlayer(props: ChatPlayerProps) {
     [characters]
   );
 
+  // --- чаты ---
+  const chats = useMemo<Record<string, ChatConfig>>(
+    () => ({ ...(props.storyMeta?.chats || {}), ...(snapshot.day.meta?.chats || {}) }),
+    [props.storyMeta?.chats, snapshot.day.meta?.chats]
+  );
+  const threaded = Object.keys(chats).length > 0;
+  const getChat = useCallback(
+    (id: string): ChatConfig =>
+      chats[id] || { name: allCharacters[defaultCharacter]?.name || "Собеседник", kind: "dm", character: defaultCharacter },
+    [chats, allCharacters, defaultCharacter]
+  );
+
   // --- состояние ---
   const [log, setLog] = useState<HistoryEntry[]>(() => props.initial?.history || []);
   const [ui, setUi] = useState<Ui>({ kind: "running" });
   const [showSettings, setShowSettings] = useState(false);
+  const [showClues, setShowClues] = useState(false);
+  const [toast, setToast] = useState<ToastData | null>(null);
+  const [activeThread, setActiveThread] = useState<string>(() => {
+    const h = props.initial?.history || [];
+    if (h.length) return h[h.length - 1].thread || MAIN;
+    return threadOf(rt.scenes[0]);
+  });
+  const [viewOverride, setViewOverride] = useState<string | null>(null);
+  const [unread, setUnread] = useState<Record<string, number>>({});
+  const view = viewOverride ?? activeThread;
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const [clueIds, setClueIds] = useState<string[]>(() => foundClues(props.initial?.flags || props.inheritedFlags, props.storyMeta));
+  const clueRef = useRef(clueIds);
+  const [hudFlags, setHudFlags] = useState<Flags>(() => props.initial?.flags || props.inheritedFlags);
   const animateFrom = useRef(props.initial?.history.length || 0);
 
   const logRef = useRef<HistoryEntry[]>(log);
@@ -124,10 +163,40 @@ export function ChatPlayer(props: ChatPlayerProps) {
     };
   }, [saveNow]);
 
-  const append = useCallback((entry: HistoryEntry) => {
-    logRef.current = [...logRef.current, entry];
-    setLog(logRef.current);
-  }, []);
+  const append = useCallback(
+    (entry: HistoryEntry) => {
+      logRef.current = [...logRef.current, entry];
+      setLog(logRef.current);
+      const t = entry.thread || MAIN;
+      if (threaded && t !== viewRef.current && !entry.hidden) {
+        setUnread(u => ({ ...u, [t]: (u[t] || 0) + 1 }));
+        if (entry.kind !== "system") {
+          const who = entry.speaker === "me" ? "Вы" : allCharacters[entry.character || defaultCharacter]?.name || "";
+          setToast({ id: entry.id + entry.at, kind: "message", thread: t, title: getChat(t).name, text: `${getChat(t).kind === "group" && who ? `${who}: ` : ""}${previewText(entry.text)}` });
+        }
+      }
+    },
+    [threaded, allCharacters, defaultCharacter, getChat]
+  );
+
+  /** Новые улики → тост */
+  const syncClues = useCallback(
+    (flags: Flags) => {
+      if (props.storyMeta?.meters) setHudFlags(flags);
+      const now = foundClues(flags, props.storyMeta);
+      const fresh = now.filter(id => !clueRef.current.includes(id));
+      if (now.length !== clueRef.current.length) {
+        clueRef.current = now;
+        setClueIds(now);
+      }
+      if (fresh.length) {
+        haptic("success");
+        const c = props.storyMeta?.clues?.[fresh[fresh.length - 1]];
+        setToast({ id: `clue:${fresh.join(",")}`, kind: "clue", title: fresh.length > 1 ? `Новые улики · ${fresh.length}` : "Новая улика", text: c?.title || "" });
+      }
+    },
+    [props.storyMeta, haptic]
+  );
 
   // --- завершение ---
   const finish = useCallback(
@@ -164,20 +233,25 @@ export function ChatPlayer(props: ChatPlayerProps) {
         if (!alive()) return;
         const r = resolve(rt, pointer, flagsRef.current);
         flagsRef.current = r.flags;
+        syncClues(r.flags);
         const step = r.step;
         const sp = speedRef.current;
+        const thread = step.kind === "end" ? null : threadOf(step.scene);
+        if (thread) setActiveThread(thread);
+        if (step.kind === "choice" || step.kind === "input") setViewOverride(null);
 
         if (step.kind === "message") {
           const isNpc = step.scene.type === "message" && step.scene.speaker === "npc";
           const who = step.scene.meta?.character || defaultCharacter;
           if (step.delayMs) await sleep(step.delayMs * sp);
           if (!alive()) return;
-          if (isNpc && step.typingMs > 0 && sp > 0) {
+          const isBot = !!allCharacters[who]?.bot;
+          if (isNpc && !isBot && step.typingMs > 0 && sp > 0) {
             lastSpeaker.current = who;
-            setUi({ kind: "typing", who });
+            setUi({ kind: "typing", who, thread: thread || MAIN });
             await sleep(step.typingMs * sp);
           } else {
-            await sleep(sp === 0 ? 30 : step.scene.speaker === "me" ? 500 * sp : 350 * sp);
+            await sleep(sp === 0 || step.scene.meta?.past ? 30 : step.scene.speaker === "me" ? 500 * sp : isBot ? 900 * sp : 350 * sp);
           }
           if (!alive()) return;
           append({
@@ -187,19 +261,21 @@ export function ChatPlayer(props: ChatPlayerProps) {
             character: isNpc ? who : null,
             text: step.text,
             at: Date.now(),
+            ...(thread && thread !== MAIN ? { thread } : {}),
+            ...(step.scene.meta?.past ? { past: true } : {}),
           });
-          if (isNpc) haptic("light");
+          if (isNpc && !step.scene.meta?.past) haptic("light");
           pointer = nextAfter(rt, step.scene.id);
           pointerRef.current = pointer;
           setUi({ kind: "running" });
           scheduleSave();
-          await sleep(sp === 0 ? 20 : 260 * sp);
+          await sleep(sp === 0 || step.scene.meta?.past ? 20 : 260 * sp);
           continue;
         }
 
         if (step.kind === "typing") {
           if (sp > 0) {
-            setUi({ kind: "typing", who: lastSpeaker.current });
+            setUi({ kind: "typing", who: lastSpeaker.current, thread: thread || MAIN });
             await sleep(step.ms * sp);
           }
           pointer = nextAfter(rt, step.scene.id);
@@ -239,7 +315,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
         return;
       }
     },
-    [rt, defaultCharacter, append, haptic, scheduleSave, saveNow, finish, allCharacters]
+    [rt, defaultCharacter, append, haptic, scheduleSave, saveNow, finish, allCharacters, syncClues]
   );
 
   // --- старт / восстановление ---
@@ -305,10 +381,10 @@ export function ChatPlayer(props: ChatPlayerProps) {
 
   // --- выбор / ввод ---
   const onChoice = useCallback(
-    async (option: SnapshotChoice & { text: string }) => {
+    async (option: SnapshotChoice & { text: string }, timedOut?: boolean) => {
       if (ui.kind !== "choice") return;
       const sceneId = ui.step.scene.id;
-      haptic("medium");
+      haptic(timedOut ? "warning" : "medium");
       const action = isActionChoice(option.text);
       await sleep(180);
       setUi({ kind: "running" });
@@ -319,15 +395,17 @@ export function ChatPlayer(props: ChatPlayerProps) {
         text: action ? stripAction(option.text) : option.text,
         at: Date.now(),
         ...(action ? { hidden: true } : {}),
+        ...(threadOf(ui.step.scene) !== MAIN ? { thread: threadOf(ui.step.scene) } : {}),
       });
       if (!preview) recordChoice(token, { storyId, dayId, sceneId, choiceId: option.id }).catch(() => undefined);
       const res = applyChoice(rt, sceneId, option, flagsRef.current);
       flagsRef.current = res.flags;
+      syncClues(res.flags);
       pointerRef.current = res.pointer;
       scheduleSave();
       run(res.pointer);
     },
-    [ui, haptic, append, preview, token, storyId, dayId, rt, scheduleSave, run]
+    [ui, haptic, append, preview, token, storyId, dayId, rt, scheduleSave, run, syncClues]
   );
 
   const onInput = useCallback(
@@ -336,7 +414,14 @@ export function ChatPlayer(props: ChatPlayerProps) {
       const step = ui.step;
       haptic("light");
       setUi({ kind: "running" });
-      append({ id: `input:${step.scene.id}`, kind: "reply", speaker: "me", text: value, at: Date.now() });
+      append({
+        id: `input:${step.scene.id}`,
+        kind: "reply",
+        speaker: "me",
+        text: value,
+        at: Date.now(),
+        ...(threadOf(step.scene) !== MAIN ? { thread: threadOf(step.scene) } : {}),
+      });
       const res = applyInput(rt, step.scene.id, step.key, value, flagsRef.current);
       flagsRef.current = res.flags;
       pointerRef.current = res.pointer;
@@ -350,8 +435,52 @@ export function ChatPlayer(props: ChatPlayerProps) {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !stickToBottom.current) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: log.length - animateFrom.current > 0 ? "smooth" : "auto" });
-  }, [log, ui]);
+    const smooth = speedRef.current > 0 && log.length - animateFrom.current > 0;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+    // после отрисовки и анимаций — ещё раз, без анимации
+    const t = setTimeout(() => {
+      if (stickToBottom.current) el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+    }, smooth ? 380 : 40);
+    return () => clearTimeout(t);
+  }, [log, ui, view]);
+
+  // Высота ленты меняется (панель выбора, клавиатура) — держимся у последнего сообщения
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (stickToBottom.current) el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+    });
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => ro.disconnect();
+  }, []);
+
+  // Переключение чата: в конец ленты, сбросить непрочитанные
+  useEffect(() => {
+    stickToBottom.current = true;
+    const toBottom = () => {
+      const el = scrollRef.current;
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+    };
+    toBottom();
+    const raf = requestAnimationFrame(toBottom);
+    const t = setTimeout(toBottom, 120);
+    setUnread(u => (u[view] ? { ...u, [view]: 0 } : u));
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
+  }, [view]);
+
+  const openThread = useCallback(
+    (t: string) => {
+      haptic("select");
+      setViewOverride(t === activeThread ? null : t);
+      setToast(null);
+    },
+    [activeThread, haptic]
+  );
 
   const onScroll = () => {
     const el = scrollRef.current;
@@ -369,24 +498,62 @@ export function ChatPlayer(props: ChatPlayerProps) {
   const nativeBack = useBackButton(onExit);
 
   // --- шапка ---
-  const headerChar = defaultCharacter;
-  const status =
-    ui.kind === "typing"
-      ? multiParty
-        ? `${allCharacters[ui.who]?.name || "Собеседник"} печатает…`
-        : "печатает…"
-      : ui.kind === "pause"
-        ? ui.label
-        : ui.kind === "ended"
-          ? "был(а) только что"
-          : allCharacters[defaultCharacter]?.status || "в сети";
-  const online = ui.kind !== "pause" && ui.kind !== "ended";
-  const visibleLog = useMemo(() => log.filter(e => !e.hidden), [log]);
-  const visibleAnimateFrom = useMemo(
-    () => log.slice(0, animateFrom.current).filter(e => !e.hidden).length,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [log.length]
+  const chat = threaded ? getChat(view) : null;
+  const isGroup = chat?.kind === "group";
+  const headerId = threaded ? (isGroup ? `chat:${view}` : chat?.character || defaultCharacter) : defaultCharacter;
+  const headerChar: Character | undefined = threaded
+    ? isGroup
+      ? { name: chat!.name, color: chat!.color || "#6b7a99", initials: chat!.initials || chat!.name.replace(/[^\p{L}\p{N}]/gu, "").slice(0, 1) }
+      : allCharacters[chat?.character || defaultCharacter]
+    : allCharacters[defaultCharacter];
+  const title = threaded ? chat!.name : allCharacters[defaultCharacter]?.name || "Собеседник";
+  const typingHere = ui.kind === "typing" && (!threaded || ui.thread === view);
+  const pauseHere = ui.kind === "pause";
+  const viewMultiParty = threaded ? isGroup : multiParty;
+  const status = typingHere
+    ? viewMultiParty
+      ? `${allCharacters[(ui as { who: string }).who]?.name || "Собеседник"} печатает…`
+      : "печатает…"
+    : pauseHere
+      ? ui.label
+      : ui.kind === "ended"
+        ? isGroup
+          ? "все не в сети"
+          : "был(а) только что"
+        : isGroup
+          ? `${(chat?.members?.length || 0) + 1} участников`
+          : chat?.status || headerChar?.status || "в сети";
+  const online = !isGroup && ui.kind !== "pause" && ui.kind !== "ended" && !/^был/i.test(status);
+
+  const threadLog = useMemo(
+    () => (threaded ? log.filter(e => (e.thread || MAIN) === view) : log),
+    [log, threaded, view]
   );
+  const visibleLog = useMemo(() => threadLog.filter(e => !e.hidden), [threadLog]);
+  const visibleAnimateFrom = useMemo(() => {
+    const cut = new Set(log.slice(0, animateFrom.current).map(e => e));
+    return visibleLog.filter(e => cut.has(e)).length;
+  }, [log, visibleLog]);
+
+  const threadsSeen = useMemo(() => {
+    if (!threaded) return [];
+    const order: string[] = [];
+    for (const e of log) {
+      const t = e.thread || MAIN;
+      if (!order.includes(t)) order.push(t);
+    }
+    if (!order.includes(activeThread)) order.push(activeThread);
+    return order;
+  }, [log, threaded, activeThread]);
+
+  const lastByThread = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const e of log) if (!e.hidden) m[e.thread || MAIN] = previewText(e.text);
+    return m;
+  }, [log]);
+
+  const hasClues = Object.keys(props.storyMeta?.clues || {}).length > 0;
+  const waitingElsewhere = threaded && view !== activeThread && (ui.kind === "choice" || ui.kind === "input" || ui.kind === "pause");
 
   return (
     <div className="chat-bg relative flex h-[100dvh] flex-col overflow-hidden">
@@ -400,54 +567,124 @@ export function ChatPlayer(props: ChatPlayerProps) {
           ) : (
             <span className="w-2" />
           )}
-          <Avatar id={headerChar} character={allCharacters[headerChar]} size={40} online={online} />
-          <div className="min-w-0 flex-1 pl-1">
-            <p className="truncate text-[16px] font-semibold leading-tight text-fg">
-              {allCharacters[defaultCharacter]?.name || "Собеседник"}
-            </p>
-            <p className={`truncate text-[13px] leading-tight ${ui.kind === "typing" ? "text-accent" : online ? "text-ok/90" : "text-faint"}`}>{status}</p>
+          <Avatar key={`av:${headerId}`} id={headerId} character={headerChar} size={40} online={threaded && isGroup ? undefined : online} className="animate-fade-in" />
+          <div key={`title:${view}`} className="min-w-0 flex-1 pl-1 animate-fade-in">
+            <p className="truncate text-[16px] font-semibold leading-tight text-fg">{title}</p>
+            <p className={`truncate text-[13px] leading-tight ${typingHere ? "text-accent" : online ? "text-ok/90" : "text-faint"}`}>{status}</p>
           </div>
           {preview && <span className="chip bg-warn/15 text-warn">предпросмотр</span>}
+          {hasClues && (
+            <button
+              onClick={() => setShowClues(true)}
+              className="relative flex h-10 items-center gap-1 rounded-full bg-white/[0.06] px-3 text-[13px] font-semibold text-fg/85 active:scale-95"
+              aria-label="Улики"
+            >
+              <Icon name="search" size={16} />
+              {clueIds.length}
+            </button>
+          )}
           <button onClick={() => setShowSettings(true)} className="flex h-10 w-10 items-center justify-center rounded-full text-muted active:bg-white/5" aria-label="Настройки">
             <Icon name="more" size={26} strokeWidth={3} />
           </button>
         </div>
+        {props.storyMeta?.meters && <MeterBar meters={props.storyMeta.meters} flags={hudFlags} />}
+        {threaded && threadsSeen.length > 1 && (
+          <ThreadTabs
+            threads={threadsSeen}
+            view={view}
+            active={activeThread}
+            unread={unread}
+            typingThread={ui.kind === "typing" ? ui.thread : null}
+            getChat={getChat}
+            characters={allCharacters}
+            last={lastByThread}
+            onOpen={openThread}
+          />
+        )}
       </header>
 
       {/* Лента */}
-      <div ref={scrollRef} onScroll={onScroll} className="no-scrollbar relative z-10 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-1">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+      {toast && (
+        <Toast
+          data={toast}
+          onClose={() => setToast(null)}
+          onOpen={toast.kind === "message" && toast.thread ? () => openThread(toast.thread!) : () => setShowClues(true)}
+        />
+      )}
+      <div ref={scrollRef} onScroll={onScroll} className="no-scrollbar flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-1">
+        <div>
         <DayDivider label={`День ${dayNumber} · ${dayTitle}`} />
         <MessageList
           entries={visibleLog}
           characters={allCharacters}
-          multiParty={multiParty}
-          defaultCharacter={defaultCharacter}
+          multiParty={viewMultiParty}
+          defaultCharacter={threaded && !isGroup ? chat?.character || defaultCharacter : defaultCharacter}
           animateFrom={visibleAnimateFrom}
         />
-        {ui.kind === "typing" && <TypingBubble characterId={ui.who} character={allCharacters[ui.who]} multiParty={multiParty} />}
+        {typingHere && ui.kind === "typing" && <TypingBubble characterId={ui.who} character={allCharacters[ui.who]} multiParty={viewMultiParty} />}
         {ui.kind === "ended" && (
           <div className="flex justify-center py-4 animate-fade-in">
             <span className="text-[12px] uppercase tracking-[0.2em] text-faint">— конец дня —</span>
           </div>
         )}
         <div className="h-2" />
+        </div>
+      </div>
       </div>
 
       {/* Нижняя панель */}
       <div className="glass relative z-20 border-t border-white/[0.06] pb-safe">
-        {ui.kind === "choice" && <ChoicePanel key={ui.step.scene.id} prompt={ui.step.prompt} options={ui.step.options} onSelect={onChoice} />}
-        {ui.kind === "input" && <InputPanel key={ui.step.scene.id} prompt={ui.step.prompt} placeholder={ui.step.placeholder} onSubmit={onInput} />}
-        {ui.kind === "pause" && <PausePanel until={ui.until} total={ui.total} label={ui.label} onSkip={endPause} />}
-        {(ui.kind === "running" || ui.kind === "typing") && <IdleComposer text={ui.kind === "typing" ? status : "Сообщение"} />}
-        {ui.kind === "ended" && <IdleComposer text="Собеседник вышел из сети" />}
+        {waitingElsewhere ? (
+          <div className="px-3 pb-3 pt-2">
+            <button onClick={() => openThread(activeThread)} className="btn-primary w-full">
+              {ui.kind === "pause" ? "Вернуться" : "Ответить"} в «{getChat(activeThread).name}»
+            </button>
+          </div>
+        ) : (
+          <>
+            {ui.kind === "choice" && (
+              <ChoicePanel
+                key={ui.step.scene.id}
+                prompt={ui.step.prompt}
+                options={ui.step.options}
+                onSelect={onChoice}
+                timerMs={timers && !preview ? ui.step.timerMs : null}
+                defaultId={ui.step.defaultId}
+                onTick={() => haptic("rigid")}
+              />
+            )}
+            {ui.kind === "input" && <InputPanel key={ui.step.scene.id} prompt={ui.step.prompt} placeholder={ui.step.placeholder} onSubmit={onInput} />}
+            {ui.kind === "pause" && <PausePanel until={ui.until} total={ui.total} label={ui.label} onSkip={endPause} />}
+            {(ui.kind === "running" || ui.kind === "typing") && <IdleComposer text={typingHere ? status : "Сообщение"} />}
+            {ui.kind === "ended" && <IdleComposer text={isGroup ? "Все вышли из сети" : "Собеседник вышел из сети"} />}
+          </>
+        )}
       </div>
 
-      {showSettings && <SettingsSheet speed={speed} onSpeed={setSpeed} onClose={() => setShowSettings(false)} onExit={onExit} />}
+      {showSettings && (
+        <SettingsSheet speed={speed} onSpeed={setSpeed} timers={timers} onTimers={setTimers} onClose={() => setShowSettings(false)} onExit={onExit} />
+      )}
+      {showClues && <ClueSheet meta={props.storyMeta} found={clueIds} onClose={() => setShowClues(false)} />}
     </div>
   );
 }
 
-function SettingsSheet({ speed, onSpeed, onClose, onExit }: { speed: Speed; onSpeed: (s: Speed) => void; onClose: () => void; onExit: () => void }) {
+function SettingsSheet({
+  speed,
+  onSpeed,
+  timers,
+  onTimers,
+  onClose,
+  onExit,
+}: {
+  speed: Speed;
+  onSpeed: (s: Speed) => void;
+  timers: boolean;
+  onTimers: (v: boolean) => void;
+  onClose: () => void;
+  onExit: () => void;
+}) {
   const opts: Array<{ id: Speed; title: string; hint: string }> = [
     { id: "normal", title: "Как в жизни", hint: "Реалистичный набор текста" },
     { id: "fast", title: "Быстро", hint: "Вдвое быстрее" },
@@ -475,6 +712,18 @@ function SettingsSheet({ speed, onSpeed, onClose, onExit }: { speed: Speed; onSp
             </button>
           ))}
         </div>
+        <button
+          onClick={() => onTimers(!timers)}
+          className="mt-3 flex w-full items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3 text-left ring-1 ring-white/[0.06]"
+        >
+          <span>
+            <span className="block text-[15px] font-medium text-fg">Выборы на время</span>
+            <span className="block text-[13px] text-faint">{timers ? "Включены — в напряжённых сценах надо успеть ответить" : "Выключены — можно думать сколько угодно"}</span>
+          </span>
+          <span className={`relative h-7 w-12 shrink-0 rounded-full transition ${timers ? "bg-accent" : "bg-white/15"}`}>
+            <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${timers ? "left-6" : "left-1"}`} />
+          </span>
+        </button>
         <div className="mt-4 grid grid-cols-2 gap-2 pb-2">
           <button className="btn-secondary" onClick={onExit}>
             Выйти из чата

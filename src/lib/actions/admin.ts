@@ -208,7 +208,8 @@ export async function importScript(dayId: string, script: string): Promise<Impor
   if (!day) return { ok: false, error: "День не найден" };
   const { data: story } = await supabase.from("stories").select("meta").eq("id", day.story_id).maybeSingle();
   try {
-    const res = await importDayScript(supabase, day as Day, script, ((story?.meta || {}) as StoryMeta).characters || {});
+    const sm = (story?.meta || {}) as StoryMeta;
+    const res = await importDayScript(supabase, day as Day, script, sm.characters || {}, sm.chats || {});
     revalidatePath(`/admin/days/${dayId}`);
     return { ok: true, scenes: res.scenes, choices: res.choices };
   } catch (e) {
@@ -239,7 +240,7 @@ export async function unpublishDay(dayId: string): Promise<void> {
 }
 
 /** Черновой снапшот для предпросмотра в админке (без публикации) */
-export async function getDraftSnapshot(dayId: string): Promise<{ snapshot: SnapshotData; characters: StoryMeta["characters"] }> {
+export async function getDraftSnapshot(dayId: string): Promise<{ snapshot: SnapshotData; characters: StoryMeta["characters"]; storyMeta: StoryMeta }> {
   await requireAdmin();
   assertId(dayId);
   const supabase = await db();
@@ -248,6 +249,7 @@ export async function getDraftSnapshot(dayId: string): Promise<{ snapshot: Snaps
   return {
     snapshot,
     characters: { ...(((story?.meta || {}) as StoryMeta).characters || {}), ...(day.meta?.characters || {}) },
+    storyMeta: (story?.meta || {}) as StoryMeta,
   };
 }
 

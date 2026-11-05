@@ -36,7 +36,16 @@ export type Step =
   | { kind: "message"; scene: SnapshotScene; text: string; typingMs: number; delayMs: number }
   | { kind: "typing"; scene: SnapshotScene; ms: number }
   | { kind: "pause"; scene: SnapshotScene; ms: number; label: string | null }
-  | { kind: "choice"; scene: SnapshotScene; prompt: string | null; options: Array<SnapshotChoice & { text: string }> }
+  | {
+      kind: "choice";
+      scene: SnapshotScene;
+      prompt: string | null;
+      options: Array<SnapshotChoice & { text: string }>;
+      /** Таймер в мс (если выбор на время) */
+      timerMs: number | null;
+      /** id варианта, который выбирается по истечении таймера */
+      defaultId: string | null;
+    }
   | { kind: "input"; scene: SnapshotScene; prompt: string; key: string; placeholder: string }
   | { kind: "end"; ending: string | null };
 
@@ -119,7 +128,7 @@ export function resolve(rt: Runtime, pointer: string | null, flagsIn: Flags): Re
       case "system": {
         const text = interpolate(scene.text || "", flags);
         const typingMs =
-          scene.type === "system" || scene.speaker === "me"
+          scene.type === "system" || scene.speaker === "me" || meta.past
             ? 0
             : meta.typing_delay ?? typingTimeFor(text);
         return {
@@ -147,8 +156,17 @@ export function resolve(rt: Runtime, pointer: string | null, flagsIn: Flags): Re
           index++;
           continue;
         }
+        const timerMs = meta.timer_ms && meta.timer_ms > 0 ? meta.timer_ms : null;
+        const def = options.find(o => o.sort_index === meta.default_choice) || options[options.length - 1];
         return {
-          step: { kind: "choice", scene, prompt: scene.meta?.prompt ? interpolate(scene.meta.prompt, flags) : null, options },
+          step: {
+            kind: "choice",
+            scene,
+            prompt: scene.meta?.prompt ? interpolate(scene.meta.prompt, flags) : null,
+            options,
+            timerMs,
+            defaultId: timerMs ? def.id : null,
+          },
           pointer: scene.id,
           flags,
         };

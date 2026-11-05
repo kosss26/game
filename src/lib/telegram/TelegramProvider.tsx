@@ -75,6 +75,9 @@ interface AppContextValue {
   haptic: (kind: HapticStyle | "success" | "error" | "warning" | "select") => void;
   speed: Speed;
   setSpeed: (s: Speed) => void;
+  /** Выборы на время включены */
+  timers: boolean;
+  setTimers: (v: boolean) => void;
   confirm: (message: string) => Promise<boolean>;
   openInvoice: (url: string) => Promise<"paid" | "cancelled" | "failed" | "pending">;
   share: (url: string, text: string) => void;
@@ -93,6 +96,7 @@ export const useTelegram = useApp;
 
 const TOKEN_KEY = "pl_token";
 const SPEED_KEY = "pl_speed";
+const TIMERS_KEY = "pl_timers";
 const BG = "#090a0f";
 
 function safeGet(key: string): string | null {
@@ -138,11 +142,13 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [authError, setAuthError] = useState(false);
   const [speed, setSpeedState] = useState<Speed>("normal");
+  const [timers, setTimersState] = useState(true);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const s = safeGet(SPEED_KEY);
     if (s === "normal" || s === "fast" || s === "instant") setSpeedState(s);
+    if (safeGet(TIMERS_KEY) === "off") setTimersState(false);
   }, []);
 
   useEffect(() => {
@@ -204,6 +210,11 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
     safeSet(SPEED_KEY, s);
   }, []);
 
+  const setTimers = useCallback((v: boolean) => {
+    setTimersState(v);
+    safeSet(TIMERS_KEY, v ? "on" : "off");
+  }, []);
+
   const confirm = useCallback(
     (message: string) =>
       new Promise<boolean>(resolve => {
@@ -247,11 +258,13 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
       haptic,
       speed,
       setSpeed,
+      timers,
+      setTimers,
       confirm,
       openInvoice,
       share,
     }),
-    [webApp, ready, session, authError, haptic, speed, setSpeed, confirm, openInvoice, share]
+    [webApp, ready, session, authError, haptic, speed, setSpeed, timers, setTimers, confirm, openInvoice, share]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

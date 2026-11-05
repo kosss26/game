@@ -4,7 +4,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseScript, validateScript, convertToDbFormat, type ParseResult } from "@/lib/parser/dsl-parser";
-import type { Character, Choice, Day, DayMeta, Scene, SnapshotData } from "@/lib/types/database";
+import type { Character, ChatConfig, Choice, Day, DayMeta, Scene, SnapshotData } from "@/lib/types/database";
 
 export class ScriptError extends Error {
   constructor(public result: ParseResult) {
@@ -18,8 +18,12 @@ export class ScriptError extends Error {
   }
 }
 
-export function parseDayScript(script: string, storyCharacters: Record<string, Character> = {}): ParseResult {
-  const result = parseScript(script, { characters: storyCharacters });
+export function parseDayScript(
+  script: string,
+  storyCharacters: Record<string, Character> = {},
+  storyChats: Record<string, ChatConfig> = {}
+): ParseResult {
+  const result = parseScript(script, { characters: storyCharacters, chats: storyChats });
   result.errors = [...result.errors, ...validateScript(result)];
   return result;
 }
@@ -31,9 +35,10 @@ export async function importDayScript(
   supabase: SupabaseClient,
   day: Pick<Day, "id" | "meta" | "title" | "estimated_minutes">,
   script: string,
-  storyCharacters: Record<string, Character> = {}
+  storyCharacters: Record<string, Character> = {},
+  storyChats: Record<string, ChatConfig> = {}
 ): Promise<{ scenes: number; choices: number; result: ParseResult }> {
-  const result = parseDayScript(script, storyCharacters);
+  const result = parseDayScript(script, storyCharacters, storyChats);
   if (result.errors.length > 0) throw new ScriptError(result);
   const dbData = convertToDbFormat(result);
 
@@ -80,6 +85,7 @@ export async function importDayScript(
     ...(day.meta || {}),
     script,
     characters: m.characters,
+    chats: m.chats,
   };
   if (m.backgroundStyle) meta.background_style = m.backgroundStyle;
   if (m.recap !== undefined) meta.recap_text = m.recap;

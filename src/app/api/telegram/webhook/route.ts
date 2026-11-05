@@ -75,7 +75,7 @@ const WELCOME = (name: string) =>
   `Привет, <b>${escapeHtml(name)}</b>.\n\n` +
   `Это <b>Полночь</b> — истории, которые происходят в переписке. ` +
   `Кто-то напишет вам сегодня ночью. От ваших ответов зависит, чем всё закончится.\n\n` +
-  `Каждый день — новая глава на 10–15 минут.`;
+  `Каждый день — новая глава.`;
 
 async function handleCommand(chatId: number, from: TgUser | undefined, text: string) {
   const [cmd, ...args] = text.trim().split(/\s+/);

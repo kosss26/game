@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { getDraftSnapshot } from "@/lib/actions/admin";
 import { ChatPlayer } from "@/components/chat/ChatPlayer";
-import type { Day, SnapshotData, Character, Flags } from "@/lib/types/database";
+import type { Day, SnapshotData, Character, Flags, StoryMeta } from "@/lib/types/database";
 
 /** Предпросмотр черновика в настоящем плеере (без сохранения прогресса) */
 export function DayPreview({ day, mainCharacter }: { day: Day; mainCharacter?: string }) {
-  const [data, setData] = useState<{ snapshot: SnapshotData; characters: Record<string, Character> } | null>(null);
+  const [data, setData] = useState<{ snapshot: SnapshotData; characters: Record<string, Character>; storyMeta: StoryMeta } | null>(null);
   const [flagsText, setFlagsText] = useState('{ "name": "Тестер" }');
   const [flags, setFlags] = useState<Flags>({});
   const [run, setRun] = useState(0);
@@ -28,7 +28,7 @@ export function DayPreview({ day, mainCharacter }: { day: Day; mainCharacter?: s
         setError("В черновике нет сцен — сохраните скрипт");
         return;
       }
-      setData({ snapshot: d.snapshot, characters: d.characters || {} });
+      setData({ snapshot: d.snapshot, characters: d.characters || {}, storyMeta: d.storyMeta });
       setRun(r => r + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка");
@@ -49,6 +49,7 @@ export function DayPreview({ day, mainCharacter }: { day: Day; mainCharacter?: s
           snapshot={data.snapshot}
           characters={data.characters}
           mainCharacter={mainCharacter}
+          storyMeta={data.storyMeta}
           inheritedFlags={flags}
           initial={null}
           onExit={() => setData(null)}

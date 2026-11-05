@@ -20,7 +20,7 @@ export function loadContent(root = path.join(process.cwd(), "content", "stories"
   if (!fs.existsSync(root)) return [];
   return fs
     .readdirSync(root, { withFileTypes: true })
-    .filter(d => d.isDirectory())
+    .filter(d => d.isDirectory() && fs.existsSync(path.join(root, d.name, "story.json")))
     .map(dir => {
       const base = path.join(root, dir.name);
       const story = JSON.parse(fs.readFileSync(path.join(base, "story.json"), "utf8"));

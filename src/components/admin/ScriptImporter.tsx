@@ -4,12 +4,13 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseScript, validateScript } from "@/lib/parser/dsl-parser";
 import { importScript } from "@/lib/actions/admin";
-import type { Character, Day } from "@/lib/types/database";
+import type { Character, ChatConfig, Day } from "@/lib/types/database";
 
 interface ScriptImporterProps {
   day: Day;
   existingScenesCount: number;
   storyCharacters?: Record<string, Character>;
+  storyChats?: Record<string, ChatConfig>;
 }
 
 const CHEATSHEET = `@title Название дня     @minutes 12     @wait 12h
@@ -27,7 +28,7 @@ CHOICE: Подсказка
 - (Действие без сообщения)
 INPUT name: Как тебя зовут?          {name} — подстановка`;
 
-export function ScriptImporter({ day, existingScenesCount, storyCharacters = {} }: ScriptImporterProps) {
+export function ScriptImporter({ day, existingScenesCount, storyCharacters = {}, storyChats = {} }: ScriptImporterProps) {
   const router = useRouter();
   const [script, setScript] = useState(day.meta?.script || "");
   const [saving, setSaving] = useState(false);
@@ -36,10 +37,10 @@ export function ScriptImporter({ day, existingScenesCount, storyCharacters = {} 
   const [showHelp, setShowHelp] = useState(!day.meta?.script);
 
   const parsed = useMemo(() => {
-    const r = parseScript(script, { characters: storyCharacters });
+    const r = parseScript(script, { characters: storyCharacters, chats: storyChats });
     r.errors = [...r.errors, ...(script.trim() ? validateScript(r) : [])];
     return r;
-  }, [script, storyCharacters]);
+  }, [script, storyCharacters, storyChats]);
 
   const dirty = script !== (day.meta?.script || "");
   const stats = {

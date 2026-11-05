@@ -310,6 +310,8 @@ function sanitizeHistory(history: unknown): HistoryEntry[] {
         text: String(e.text || "").slice(0, 2000),
         at: typeof e.at === "number" ? e.at : Date.now(),
         ...(e.hidden === true ? { hidden: true } : {}),
+        ...(typeof e.thread === "string" && e.thread ? { thread: e.thread.slice(0, 40) } : {}),
+        ...(e.past === true ? { past: true } : {}),
       },
     ];
   });

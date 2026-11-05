@@ -41,7 +41,7 @@ async function main() {
   for (const s of stories) {
     // Проверка до записи
     for (const d of s.days) {
-      const r = parseDayScript(d.script, s.meta.characters || {});
+      const r = parseDayScript(d.script, s.meta.characters || {}, s.meta.chats || {});
       if (r.errors.length) {
         console.error(`✗ ${s.slug}/${d.file}:\n` + r.errors.map(e => `   строка ${e.line}: ${e.message}`).join("\n"));
         process.exit(1);
@@ -87,7 +87,7 @@ async function main() {
         console.log(`   = День ${d.number}: без изменений`);
         continue;
       }
-      const res = await importDayScript(client, day, d.script, s.meta.characters || {});
+      const res = await importDayScript(client, day, d.script, s.meta.characters || {}, s.meta.chats || {});
       let note = "";
       if (!draft) {
         const pub = await publishDaySnapshot(client, day.id);

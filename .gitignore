@@ -38,7 +38,7 @@ next-env.d.ts
 # IDE
 .idea
 .vscode
-.data
+.data*
 
 # Backups
 deploy/backups/*.dump

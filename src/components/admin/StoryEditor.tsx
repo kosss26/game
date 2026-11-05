@@ -178,6 +178,8 @@ export function StoryEditor({ story }: StoryEditorProps) {
             className="w-full bg-tg-bg border border-tg-border rounded-xl px-4 py-3 text-tg-text focus:outline-none focus:border-tg-accent"
           >
             <option value="forest">Лес / санаторий</option>
+            <option value="winter">Зимнее озеро</option>
+            <option value="aurora">Ночной город, сияние</option>
             <option value="noir">Нуар</option>
             <option value="romance">Романтика</option>
             <option value="thriller">Триллер</option>

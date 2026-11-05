@@ -10,8 +10,8 @@ import type { Flags, SnapshotData } from "@/lib/types/database";
 
 const stories = loadContent();
 
-function toSnapshot(script: string, characters: Record<string, { name: string }>): SnapshotData {
-  const parsed = parseDayScript(script, characters);
+function toSnapshot(script: string, characters: Record<string, { name: string }>, chats: Record<string, { name: string }> = {}): SnapshotData {
+  const parsed = parseDayScript(script, characters, chats);
   if (parsed.errors.length) throw new Error(parsed.errors.map(e => `${e.line}: ${e.message}`).join("\n"));
   const db = convertToDbFormat(parsed);
   return {
@@ -28,18 +28,52 @@ function rand(seed: number) {
 
 describe.each(stories.map(s => [s.slug, s] as const))("контент: %s", (_slug, story) => {
   const characters = story.meta.characters || {};
-  const snapshots = story.days.map(d => ({ n: d.number, snap: toSnapshot(d.script, characters) }));
+  const snapshots = story.days.map(d => ({ n: d.number, snap: toSnapshot(d.script, characters, story.meta.chats || {}) }));
 
   it("дни идут подряд с 1", () => {
     expect(story.days.map(d => d.number)).toEqual(story.days.map((_, i) => i + 1));
   });
 
-  it("все тексты без незакрытых подстановок, кроме флагов игрока", () => {
+  it("подстановки {flag} ссылаются только на флаги, которые где-то задаются", () => {
+    const assigned = new Set<string>(["name"]);
     for (const { snap } of snapshots) {
-      for (const s of snap.scenes) {
-        for (const m of (s.text || "").matchAll(/\{([^}]+)\}/g)) expect(["name"]).toContain(m[1]);
+      for (const sc of snap.scenes) {
+        if (sc.meta?.input_key) assigned.add(sc.meta.input_key);
+        for (const op of sc.meta?.ops || []) {
+          const m = op.replace(/^flag:/i, "").match(/^!?\s*([\p{L}_][\p{L}\p{N}_.]*)/u);
+          if (m) assigned.add(m[1]);
+        }
+      }
+      for (const c of snap.choices) for (const k of Object.keys(c.set_flags || {})) assigned.add(k);
+    }
+    const unknown: string[] = [];
+    for (const { n, snap } of snapshots) {
+      for (const sc of snap.scenes) {
+        for (const m of (sc.text || "").matchAll(/\{([^}|]+)\}/g)) if (!assigned.has(m[1])) unknown.push(`день ${n}: {${m[1]}}`);
       }
     }
+    expect(unknown).toEqual([]);
+  });
+
+  it("в каждом чате пишут только его участники", () => {
+    const problems: string[] = [];
+    for (const d of story.days) {
+      const r = parseDayScript(d.script, characters, story.meta.chats || {});
+      const chats = { ...(story.meta.chats || {}), ...r.dayMeta.chats };
+      if (Object.keys(chats).length === 0) continue;
+      for (const sc of r.scenes) {
+        if (sc.type !== "message" || sc.speaker !== "npc" || !sc.meta.thread) continue;
+        const c = chats[sc.meta.thread];
+        if (!c) continue;
+        if (c.kind === "group") {
+          const allowed = [...(c.members || []), ...(c.also || [])];
+          if (!allowed.includes(sc.meta.character || "")) problems.push(`${d.file}:${sc.line} ${sc.meta.character} пишет в группу «${c.name}»`);
+          continue;
+        }
+        if (c.character !== sc.meta.character && !(c.also || []).includes(sc.meta.character || "")) problems.push(`${d.file}:${sc.line} ${sc.meta.character} пишет в чат «${c.name}»`);
+      }
+    }
+    expect(problems).toEqual([]);
   });
 
   it("случайные прохождения завершаются, все концовки достижимы", () => {

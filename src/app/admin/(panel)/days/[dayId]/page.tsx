@@ -54,6 +54,7 @@ export default async function DayEditorPage({ params }: PageProps) {
         scenes={scenes} 
         choices={choices}
         storyCharacters={story?.meta?.characters}
+        storyChats={story?.meta?.chats}
         mainCharacter={story?.meta?.main_character}
       />
     </div>

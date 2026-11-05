@@ -181,3 +181,33 @@ describe("validate / convert", () => {
     expect(parseFlagsString(undefined)).toEqual({});
   });
 });
+
+describe("DSL parser — чаты, архив, род", () => {
+  it("[chat id] проставляет тред, @chat объявляет чат", () => {
+    const r = parseScript("@chat group Дача | kind=group | members=mark,dima\n[chat group]\nNPC: всем привет\n[chat lera]\nNPC: ты тут?", {
+      chats: { lera: { name: "Лера", kind: "dm", character: "lera" } },
+    });
+    expect(r.errors).toEqual([]);
+    expect(r.dayMeta.chats.group).toEqual({ name: "Дача", kind: "group", members: ["mark", "dima"] });
+    expect(r.scenes[0].meta.thread).toBe("group");
+    expect(r.scenes[1].meta.thread).toBe("lera");
+  });
+
+  it("неизвестный чат — ошибка", () => {
+    expect(parseScript("[chat nope]\nNPC: x").errors[0].message).toMatch(/Неизвестный чат/);
+  });
+
+  it("[history] помечает сообщения архивными", () => {
+    const r = parseScript("[history]\nNPC: старое\nSYS: 18 декабря\n[/history]\nNPC: новое");
+    expect(r.scenes.map(s => !!s.meta.past)).toEqual([true, true, false]);
+  });
+});
+
+describe("DSL parser — выбор на время", () => {
+  it("[timer] и [default]", () => {
+    const r = parseScript("CHOICE: Беги! [timer 8s]\n- Влево -> a\n- (Замереть) [default] -> a\n- Вправо -> a\n:: a\nNPC: x");
+    expect(r.errors).toEqual([]);
+    expect(r.scenes[0].meta).toMatchObject({ prompt: "Беги!", timer_ms: 8000, default_choice: 1 });
+    expect(r.choices[1].label).toBe("(Замереть)");
+  });
+});
