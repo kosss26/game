@@ -26,7 +26,14 @@ async function call(method: string, params: Record<string, unknown> = {}) {
         "Если Telegram недоступен с сервера, задайте TELEGRAM_API_URL (адрес relay) в файле настроек."
     );
   }
-  const json = (await res.json()) as { ok: boolean; description?: string; result?: { username?: string; url?: string } };
+  const raw = await res.text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`${method}: ${new URL(apiUrl).host} ответил HTTP ${res.status}: ${raw.slice(0, 120)}`);
+  }
+  const json = parsed as { ok: boolean; description?: string; result?: { username?: string; url?: string } };
   console.log(`${json.ok ? "✓" : "✗"} ${method}${json.ok ? "" : `: ${json.description}`}`);
   if (!json.ok) throw new Error(`${method}: ${json.description || "Telegram API error"}`);
   return json;
