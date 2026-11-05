@@ -322,7 +322,90 @@ function Aurora() {
   );
 }
 
+
+function Perseids() {
+  const r = rng(444);
+  const meteors = [
+    { x: 300, y: 30, len: 120 },
+    { x: 220, y: 70, len: 70 },
+    { x: 360, y: 90, len: 90 },
+    { x: 150, y: 20, len: 55 },
+    { x: 260, y: 125, len: 40 },
+  ];
+  return (
+    <>
+      <defs>
+        <linearGradient id="psky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#07061a" />
+          <stop offset="0.6" stopColor="#1a1440" />
+          <stop offset="1" stopColor="#2c1f52" />
+        </linearGradient>
+        <linearGradient id="ptrail" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="1" stopColor="#e9e4ff" stopOpacity="0.95" />
+        </linearGradient>
+        <linearGradient id="pgreen" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#6dffb5" stopOpacity="0" />
+          <stop offset="1" stopColor="#b9ffd8" stopOpacity="1" />
+        </linearGradient>
+        <radialGradient id="pglow" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#ffcf7a" stopOpacity="0.8" />
+          <stop offset="1" stopColor="#ffcf7a" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="priver" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#1b1640" />
+          <stop offset="1" stopColor="#07061a" />
+        </linearGradient>
+      </defs>
+      <rect width="400" height="320" fill="url(#psky)" />
+      <Stars seed={44} count={120} maxY={210} />
+      {/* кольцо — петля */}
+      <circle cx="120" cy="96" r="58" fill="none" stroke="#8b7cf6" strokeOpacity="0.28" strokeWidth="1.5" strokeDasharray="2 5" />
+      <circle cx="120" cy="96" r="44" fill="none" stroke="#8b7cf6" strokeOpacity="0.18" strokeWidth="1" />
+      {/* метеоры */}
+      {meteors.map((m, i) => (
+        <line key={i} x1={m.x - m.len} y1={m.y - m.len * 0.55} x2={m.x} y2={m.y} stroke="url(#ptrail)" strokeWidth={i === 0 ? 2.2 : 1.4} strokeLinecap="round" />
+      ))}
+      {/* Фонарщик — зелёный */}
+      <line x1="40" y1="110" x2="118" y2="150" stroke="url(#pgreen)" strokeWidth="2.6" strokeLinecap="round" />
+      <circle cx="118" cy="150" r="2.6" fill="#d9ffe9" />
+      {/* холм и башня */}
+      <path d="M0 240 C 60 200, 140 196, 210 236 L 210 320 L 0 320 Z" fill="#0b0920" />
+      <g fill="#05040f">
+        <rect x="96" y="150" width="8" height="64" />
+        <rect x="124" y="150" width="8" height="64" />
+        <path d="M90 214 L138 214 L132 150 L96 150 Z" opacity="0.9" />
+        <rect x="84" y="128" width="60" height="26" rx="3" />
+        <path d="M80 130 L114 112 L148 130 Z" />
+      </g>
+      <rect x="108" y="136" width="6" height="8" fill="#ffcf7a" opacity="0.9" />
+      <circle cx="111" cy="140" r="14" fill="url(#pglow)" opacity="0.5" />
+      {/* городок */}
+      <path d="M200 252 h200 v20 h-200z" fill="#0a0820" />
+      {Array.from({ length: 22 }, (_, i) => {
+        const x = 205 + i * 9 + r() * 3;
+        const h = 6 + r() * 16;
+        return <rect key={i} x={x} y={252 - h} width="7" height={h} fill="#0a0820" />;
+      })}
+      {Array.from({ length: 16 }, (_, i) => (
+        <rect key={`w${i}`} x={208 + r() * 186} y={236 + r() * 14} width="2" height="2" fill="#ffcf7a" opacity={0.5 + r() * 0.5} />
+      ))}
+      {/* река и мост */}
+      <rect x="0" y="268" width="400" height="52" fill="url(#priver)" />
+      {Array.from({ length: 26 }, (_, i) => (
+        <rect key={`r${i}`} x={r() * 400} y={272 + r() * 44} width={6 + r() * 26} height="1.2" fill={r() > 0.7 ? "#b9ffd8" : "#e9e4ff"} opacity={0.12 + r() * 0.25} />
+      ))}
+      <path d="M180 268 L 400 262" stroke="#14112e" strokeWidth="7" />
+      {[200, 250, 300, 350].map(x => (
+        <rect key={x} x={x} y={262 - (x - 180) * 0.027} width="3" height="14" fill="#14112e" />
+      ))}
+      <rect x="282" y="259" width="26" height="4" fill="#e0a34a" opacity="0.7" />
+    </>
+  );
+}
+
 const STYLES: Record<string, () => React.JSX.Element> = {
+  perseids: Perseids,
   forest: Forest,
   winter: Winter,
   aurora: Aurora,
