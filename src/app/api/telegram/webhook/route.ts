@@ -71,11 +71,38 @@ async function ensureUser(from: TgUser, refParam?: string) {
   }
 }
 
-const WELCOME = (name: string) =>
-  `Привет, <b>${escapeHtml(name)}</b>.\n\n` +
-  `Это <b>Полночь</b> — истории, которые происходят в переписке. ` +
-  `Кто-то напишет вам сегодня ночью. От ваших ответов зависит, чем всё закончится.\n\n` +
-  `Каждый день — новая глава.`;
+const WELCOME = (name: string, stories: { title: string; tagline?: string; genre?: string }[]) => {
+  const list = stories
+    .map(st => `<b>${escapeHtml(st.title)}</b>${st.genre ? ` · <i>${escapeHtml(st.genre)}</i>` : ""}${st.tagline ? `\n${escapeHtml(st.tagline)}` : ""}`)
+    .join("\n\n");
+  return (
+    `Привет, <b>${escapeHtml(name)}</b> 🌙\n\n` +
+    `Это <b>Полночь</b> — истории, которые происходят прямо в переписке. ` +
+    `Вам пишут живые персонажи, вы отвечаете, и от каждого ответа зависит, чем всё закончится.\n\n` +
+    `▫️ несколько чатов одновременно, улики и тайны\n` +
+    `▫️ решения на время — думать некогда\n` +
+    `▫️ несколько концовок, одна из них секретная\n` +
+    `▫️ новая глава открывается на следующий день — бот напомнит\n` +
+    (list ? `\n<b>Сейчас в приложении:</b>\n\n${list}\n\n` : "\n") +
+    `Выберите историю или откройте весь список 👇`
+  );
+};
+
+async function publishedStories() {
+  try {
+    const supabase = await db();
+    const { data } = await supabase
+      .from("stories")
+      .select("id, title, meta, sort_order")
+      .eq("status", "published")
+      .order("sort_order", { ascending: true });
+    return ((data || []) as { id: string; title: string; meta: { tagline?: string; genre?: string } | null }[])
+      .slice(0, 6)
+      .map(st => ({ id: st.id, title: st.title, tagline: st.meta?.tagline, genre: st.meta?.genre }));
+  } catch {
+    return [];
+  }
+}
 
 async function handleCommand(chatId: number, from: TgUser | undefined, text: string) {
   const [cmd, ...args] = text.trim().split(/\s+/);
@@ -83,7 +110,13 @@ async function handleCommand(chatId: number, from: TgUser | undefined, text: str
 
   if (command === "/start") {
     if (from) await ensureUser(from, args[0]);
-    await sendMessage(chatId, WELCOME(from?.first_name || "друг"), { reply_markup: webAppButton("🌙 Открыть истории") });
+    const stories = await publishedStories();
+    const appUrl = config.appUrl;
+    const keyboard = [
+      ...stories.map(st => [{ text: `▶️ ${st.title}`, web_app: { url: `${appUrl}/story/${st.id}` } }]),
+      [{ text: "🌙 Все истории", web_app: { url: `${appUrl}/` } }],
+    ];
+    await sendMessage(chatId, WELCOME(from?.first_name || "друг", stories), { reply_markup: { inline_keyboard: keyboard } });
     return;
   }
   if (command === "/paysupport") {
