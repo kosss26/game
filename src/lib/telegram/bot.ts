@@ -11,9 +11,13 @@ export async function callBot<T = unknown>(method: string, params: Record<string
   if (!config.botToken) throw new BotApiError(method, 0, "TELEGRAM_BOT_TOKEN не задан");
   const res = await fetch(`${config.telegramApiUrl}/bot${config.botToken}/${method}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(config.telegramRelaySecret ? { "X-Relay-Secret": config.telegramRelaySecret } : {}),
+    },
     body: JSON.stringify(params),
     cache: "no-store",
+    signal: AbortSignal.timeout(15000),
   });
   const json = (await res.json().catch(() => ({}))) as { ok?: boolean; result?: T; error_code?: number; description?: string };
   if (!json.ok) throw new BotApiError(method, json.error_code || res.status, json.description || "unknown error");

@@ -7,14 +7,15 @@
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const appUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
 const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-const apiUrl = (process.env.TELEGRAM_API_URL || "https://api.telegram.org").replace(/\/$/, "");
+const apiUrl = (process.env.TELEGRAM_API_URL || process.env.TELEGRAM_API_BASE || "https://api.telegram.org").replace(/\/+$/, "");
+const relaySecret = process.env.TELEGRAM_RELAY_SECRET || "";
 
 async function call(method: string, params: Record<string, unknown>) {
   let res: Response;
   try {
     res = await fetch(`${apiUrl}/bot${token}/${method}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(relaySecret ? { "X-Relay-Secret": relaySecret } : {}) },
       body: JSON.stringify(params),
       signal: AbortSignal.timeout(20000),
     });

@@ -18,7 +18,11 @@ export const config = {
   botToken: process.env.TELEGRAM_BOT_TOKEN || "",
   /** Адрес Bot API (можно указать свой relay/прокси, если api.telegram.org недоступен с сервера) */
   get telegramApiUrl() {
-    return (process.env.TELEGRAM_API_URL || "https://api.telegram.org").replace(/\/$/, "");
+    return (process.env.TELEGRAM_API_URL || process.env.TELEGRAM_API_BASE || "https://api.telegram.org").replace(/\/+$/, "");
+  },
+  /** Секрет relay (заголовок X-Relay-Secret), если relay его проверяет */
+  get telegramRelaySecret() {
+    return process.env.TELEGRAM_RELAY_SECRET || "";
   },
   botUsername: env("BOT_USERNAME").replace(/^@/, ""),
   appShortName: env("APP_SHORT_NAME"),
