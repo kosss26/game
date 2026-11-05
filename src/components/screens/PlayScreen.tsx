@@ -48,14 +48,14 @@ export function PlayScreen({ storyId, dayNumber }: { storyId: string; dayNumber:
 
   if (!ready) return <FullscreenLoader />;
   if (authError) return <ErrorState title="Не удалось войти" text="Проверьте соединение и попробуйте снова." action={retryAuth} />;
-  if (failed) return <ErrorState title="Нет соединения" text="Не получилось загрузить день." action={load} />;
+  if (failed) return <ErrorState title="Нет соединения" text="Не получилось загрузить главу." action={load} />;
   if (!payload) return <FullscreenLoader label="Открываем переписку…" />;
 
   if (!payload.ok) {
     if (payload.reason === "locked") {
-      return <ErrorState icon="lock" title="День пока закрыт" text="Сначала завершите предыдущий день — или откройте его на странице истории." href={`/story/${storyId}`} actionLabel="К истории" />;
+      return <ErrorState icon="lock" title="Глава пока закрыта" text="Сначала завершите предыдущую главу — или откройте её на странице истории." href={`/story/${storyId}`} actionLabel="К истории" />;
     }
-    return <ErrorState icon="book" title="День не найден" text="Возможно, он ещё не опубликован." href="/" actionLabel="На главную" />;
+    return <ErrorState icon="book" title="Глава не найдена" text="Возможно, она ещё не опубликована." href="/" actionLabel="На главную" />;
   }
 
   const p = payload as OkPayload;
@@ -87,7 +87,7 @@ export function PlayScreen({ storyId, dayNumber }: { storyId: string; dayNumber:
     return (
       <Reread
         history={result.history}
-        title={`День ${p.day.number} · ${p.day.title}`}
+        title={`Глава ${p.day.number} · ${p.day.title}`}
         characters={p.characters}
         mainCharacter={p.story.meta.main_character}
         chats={{ ...(p.story.meta.chats || {}), ...(p.snapshot.day.meta?.chats || {}) }}

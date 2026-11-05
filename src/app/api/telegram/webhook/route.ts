@@ -82,7 +82,7 @@ const WELCOME = (name: string, stories: { title: string; tagline?: string; genre
     `▫️ несколько чатов одновременно, улики и тайны\n` +
     `▫️ решения на время — думать некогда\n` +
     `▫️ несколько концовок, одна из них секретная\n` +
-    `▫️ новая глава открывается на следующий день — бот напомнит\n` +
+    `▫️ новые главы — бот напомнит, когда откроются\n` +
     (list ? `\n<b>Сейчас в приложении:</b>\n\n${list}\n\n` : "\n") +
     `Выберите историю или откройте весь список 👇`
   );
@@ -169,7 +169,7 @@ export async function POST(req: Request) {
           update.message!.chat.id,
           payload.product === "season_pass"
             ? "✨ Сезонный пропуск активирован. Все дни истории открываются без ожидания."
-            : `✨ День ${payload.dayNumber} открыт. Возвращайтесь в историю!`,
+            : `✨ Глава ${payload.dayNumber} открыта. Возвращайтесь в историю!`,
           { reply_markup: webAppButton("Продолжить", `/story/${payload.storyId}`) }
         ).catch(() => undefined);
       }

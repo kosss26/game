@@ -36,6 +36,43 @@ export interface CatalogItem {
   nextDay: number | null;
   status: "new" | "in_progress" | "waiting" | "finished" | "coming";
   unlocksAt: string | null;
+  /** Когда игрок последний раз играл в эту историю (ISO) */
+  lastPlayedAt: string | null;
+  endingsTotal: number;
+  endingsFound: number;
+  /** Самая свежая история, которую игрок ещё не начинал */
+  isNew: boolean;
+  /** Оценка длительности одной главы, мин */
+  minutesPerDay: number | null;
+}
+
+export interface HomeView {
+  items: CatalogItem[];
+  shareLink: string;
+  isGuest: boolean;
+}
+
+export interface ProfileStory {
+  id: string;
+  title: string;
+  cover_style: string | null;
+  status: CatalogItem["status"];
+  completedDays: number;
+  totalDays: number;
+  endings: Array<{ id: string; title: string; description: string | null; unlocked: boolean; secret: boolean }>;
+}
+
+export interface ProfileView {
+  name: string | null;
+  photo: string | null;
+  isGuest: boolean;
+  stats: { started: number; finished: number; chapters: number; endings: number; endingsTotal: number };
+  stories: ProfileStory[];
+  credits: number;
+  shareLink: string;
+  invited: number;
+  referralBonus: number;
+  freeAccess: boolean;
 }
 
 export interface StoryView {
@@ -87,8 +124,8 @@ async function loadAccessContext(user: User | null, storyId: string) {
   const [{ data: days }, progressRes, purchaseRes] = await Promise.all([
     supabase.from("days").select("*").eq("story_id", storyId).order("day_number", { ascending: true }),
     user
-      ? supabase.from("progresses").select("day_id, completed, completed_at, flags").eq("user_id", user.id).eq("story_id", storyId)
-      : Promise.resolve({ data: [] as Array<Pick<Progress, "day_id" | "completed" | "completed_at" | "flags">> }),
+      ? supabase.from("progresses").select("day_id, completed, completed_at, flags, updated_at").eq("user_id", user.id).eq("story_id", storyId)
+      : Promise.resolve({ data: [] as Array<Pick<Progress, "day_id" | "completed" | "completed_at" | "flags" | "updated_at">> }),
     user
       ? supabase.from("purchases").select("product, day_number").eq("user_id", user.id).eq("story_id", storyId)
       : Promise.resolve({ data: [] as Array<Pick<Purchase, "product" | "day_number">> }),
@@ -99,7 +136,7 @@ async function loadAccessContext(user: User | null, storyId: string) {
   if (forced !== undefined && forced !== "") {
     allDays = allDays.map(d => ({ ...d, meta: { ...(d.meta || {}), wait_hours: parseFloat(forced) } }));
   }
-  const progresses = (progressRes.data || []) as Array<Pick<Progress, "day_id" | "completed" | "completed_at" | "flags">>;
+  const progresses = (progressRes.data || []) as Array<Pick<Progress, "day_id" | "completed" | "completed_at" | "flags" | "updated_at">>;
   const purchases = (purchaseRes.data || []) as Array<Pick<Purchase, "product" | "day_number">>;
   const isAdmin = await isUserAdmin(user);
   const access = computeAccess({
@@ -133,8 +170,7 @@ function summarize(access: DayAccess[], upcoming: number): Pick<CatalogItem, "co
 // Каталог
 // ---------------------------------------------------------------------------
 
-export async function getCatalog(token: string | null): Promise<CatalogItem[]> {
-  const user = await resolveUser(token);
+async function buildCatalog(user: User | null): Promise<CatalogItem[]> {
   const supabase = await db();
   const { data: stories } = await supabase
     .from("stories")
@@ -143,21 +179,94 @@ export async function getCatalog(token: string | null): Promise<CatalogItem[]> {
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: false });
 
+  const list = (stories || []) as Story[];
   const items: CatalogItem[] = [];
-  for (const s of (stories || []) as Story[]) {
+  for (const s of list) {
     const ctx = await loadAccessContext(user, s.id);
     const upcoming = ctx.allDays.filter(d => d.status !== "published").length;
+    const meta = storyMeta(s);
+    const last = ctx.progresses.reduce<string | null>((m, p) => (p.updated_at && (!m || p.updated_at > m) ? p.updated_at : m), null);
+    const published = ctx.allDays.filter(d => d.status === "published");
+    const mins = published.map(d => d.estimated_minutes || 0).filter(Boolean);
     items.push({
       id: s.id,
       title: s.title,
       description: s.description,
       cover_style: s.cover_style,
-      meta: storyMeta(s),
+      meta,
       totalDays: ctx.access.length + upcoming,
       ...summarize(ctx.access, upcoming),
+      lastPlayedAt: last,
+      endingsTotal: Object.keys(meta.endings || {}).length,
+      endingsFound: ((user?.meta?.endings?.[s.id] || []) as string[]).length,
+      isNew: false,
+      minutesPerDay: mins.length ? Math.round(mins.reduce((a, b) => a + b, 0) / mins.length) : null,
     });
   }
+  // «Новая» — самая свежая по дате создания история, которую игрок ещё не начинал
+  const newest = [...list].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))[0];
+  const it = newest && items.find(i => i.id === newest.id);
+  if (it && it.status === "new") it.isNew = true;
   return items;
+}
+
+export async function getCatalog(token: string | null): Promise<CatalogItem[]> {
+  return buildCatalog(await resolveUser(token));
+}
+
+export async function getHome(token: string | null): Promise<HomeView> {
+  const user = await resolveUser(token);
+  return {
+    items: await buildCatalog(user),
+    shareLink: miniAppLink(user && !user.is_guest ? `ref_${user.telegram_id}` : undefined),
+    isGuest: !user || !!user.is_guest,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Профиль
+// ---------------------------------------------------------------------------
+
+export async function getProfile(token: string | null): Promise<ProfileView> {
+  const user = await resolveUser(token);
+  const supabase = await db();
+  const items = await buildCatalog(user);
+  const { data: stories } = await supabase.from("stories").select("id, meta").eq("status", "published");
+  const metaById = new Map(((stories || []) as Array<Pick<Story, "id" | "meta">>).map(s => [s.id, (s.meta || {}) as StoryMeta]));
+  let invited = 0;
+  if (user && !user.is_guest) {
+    const { data } = await supabase.from("users").select("id").eq("referred_by", user.id).limit(1000);
+    invited = (data || []).length;
+  }
+  const profileStories: ProfileStory[] = items.map(it => {
+    const got = new Set((user?.meta?.endings?.[it.id] || []) as string[]);
+    const endings = Object.entries(metaById.get(it.id)?.endings || it.meta.endings || {}).map(([id, e]) => ({
+      id,
+      title: e.title,
+      description: got.has(id) ? e.description || null : null,
+      unlocked: got.has(id),
+      secret: !!e.secret,
+    }));
+    return { id: it.id, title: it.title, cover_style: it.cover_style, status: it.status, completedDays: it.completedDays, totalDays: it.totalDays, endings };
+  });
+  return {
+    name: user && !user.is_guest ? user.first_name : null,
+    photo: user && !user.is_guest ? user.photo_url : null,
+    isGuest: !user || !!user.is_guest,
+    stats: {
+      started: items.filter(i => i.completedDays > 0 || i.status === "in_progress").length,
+      finished: items.filter(i => i.status === "finished").length,
+      chapters: items.reduce((a, i) => a + i.completedDays, 0),
+      endings: items.reduce((a, i) => a + i.endingsFound, 0),
+      endingsTotal: items.reduce((a, i) => a + i.endingsTotal, 0),
+    },
+    stories: profileStories,
+    credits: user?.skip_credits ?? 0,
+    shareLink: miniAppLink(user && !user.is_guest ? `ref_${user.telegram_id}` : undefined),
+    invited,
+    referralBonus: config.referralBonus,
+    freeAccess: config.freeAccess,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -466,7 +575,7 @@ export async function redeemSkipCredit(token: string | null, storyId: string, da
   if (!user) return { ok: false, error: "Нужно войти" };
   const ctx = await loadAccessContext(user, storyId);
   const access = ctx.access.find(a => a.dayNumber === dayNumber);
-  if (!access || access.status !== "waiting") return { ok: false, error: "День уже доступен" };
+  if (!access || access.status !== "waiting") return { ok: false, error: "Глава уже доступна" };
   const supabase = await db();
   const { data: consumed } = await supabase.rpc("consume_skip_credit", { p_user_id: user.id });
   if (!consumed) return { ok: false, error: "Нет бесплатных пропусков" };
@@ -488,10 +597,10 @@ export async function createInvoice(
 
   try {
     if (input.product === "skip_day") {
-      if (!Number.isInteger(input.dayNumber) || (input.dayNumber as number) < 1) return { ok: false, error: "Некорректный день" };
+      if (!Number.isInteger(input.dayNumber) || (input.dayNumber as number) < 1) return { ok: false, error: "Некорректная глава" };
       const link = await createStarsInvoiceLink({
-        title: `День ${input.dayNumber} — сейчас`,
-        description: `Открыть день ${input.dayNumber} истории «${story.title}» без ожидания`,
+        title: `Глава ${input.dayNumber} — сейчас`,
+        description: `Открыть главу ${input.dayNumber} истории «${story.title}» без ожидания`,
         payload: encodePayload({ product: "skip_day", storyId: input.storyId, dayNumber: input.dayNumber!, userId: user.id }),
         stars: config.prices.skipDay,
       });

@@ -73,10 +73,10 @@ export async function GET(req: Request) {
       const main = meta.main_character ? meta.characters?.[meta.main_character]?.name : null;
       const custom = next.meta?.push;
       const text = custom
-        ? `💬 ${escapeHtml(custom)}\n\n<i>${escapeHtml(story.title)} · День ${next.day_number}</i>`
+        ? `💬 ${escapeHtml(custom)}\n\n<i>${escapeHtml(story.title)} · Глава ${next.day_number}</i>`
         : main
-        ? `💬 <b>${escapeHtml(main)}</b>: «Ты здесь? Мне нужно тебе кое-что рассказать…»\n\n<i>${escapeHtml(story.title)} · День ${next.day_number}</i>`
-        : `🌙 Открылся новый день истории <b>${escapeHtml(story.title)}</b>: «${escapeHtml(next.title)}»`;
+        ? `💬 <b>${escapeHtml(main)}</b>: «Ты здесь? Мне нужно тебе кое-что рассказать…»\n\n<i>${escapeHtml(story.title)} · Глава ${next.day_number}</i>`
+        : `🌙 Открылась новая глава истории <b>${escapeHtml(story.title)}</b>: «${escapeHtml(next.title)}»`;
       try {
         await sendMessage(Number(user.telegram_id), text, { reply_markup: webAppButton("Ответить", `/play/${story.id}/${next.day_number}`) });
         sent++;

@@ -635,7 +635,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
       )}
       <div ref={scrollRef} onScroll={onScroll} className="no-scrollbar flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-1">
         <div>
-        <DayDivider label={`День ${dayNumber} · ${dayTitle}`} />
+        <DayDivider label={`Глава ${dayNumber} · ${dayTitle}`} />
         <MessageList
           entries={visibleLog}
           characters={allCharacters}
@@ -646,7 +646,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
         {typingHere && ui.kind === "typing" && <TypingBubble characterId={ui.who} character={allCharacters[ui.who]} multiParty={viewMultiParty} />}
         {ui.kind === "ended" && (
           <div className="flex justify-center py-4 animate-fade-in">
-            <span className="text-[12px] uppercase tracking-[0.2em] text-faint">— конец дня —</span>
+            <span className="text-[12px] uppercase tracking-[0.2em] text-faint">— конец главы —</span>
           </div>
         )}
         <div className="h-2" />
