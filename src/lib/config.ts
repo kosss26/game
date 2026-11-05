@@ -16,6 +16,10 @@ export const config = {
   supabaseUrl: env("SUPABASE_URL"),
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   botToken: process.env.TELEGRAM_BOT_TOKEN || "",
+  /** Адрес Bot API (можно указать свой relay/прокси, если api.telegram.org недоступен с сервера) */
+  get telegramApiUrl() {
+    return (process.env.TELEGRAM_API_URL || "https://api.telegram.org").replace(/\/$/, "");
+  },
   botUsername: env("BOT_USERNAME").replace(/^@/, ""),
   appShortName: env("APP_SHORT_NAME"),
   appUrl: env("APP_URL").replace(/\/$/, ""),

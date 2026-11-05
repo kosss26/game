@@ -7,13 +7,24 @@
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const appUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
 const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+const apiUrl = (process.env.TELEGRAM_API_URL || "https://api.telegram.org").replace(/\/$/, "");
 
 async function call(method: string, params: Record<string, unknown>) {
-  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${apiUrl}/bot${token}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+      signal: AbortSignal.timeout(20000),
+    });
+  } catch (error) {
+    const cause = (error as { cause?: { code?: string; message?: string } }).cause;
+    throw new Error(
+      `${method}: нет связи с ${new URL(apiUrl).host} (${cause?.code || cause?.message || (error as Error).message}). ` +
+        "Если Telegram недоступен с сервера, задайте TELEGRAM_API_URL (адрес relay) в файле настроек."
+    );
+  }
   const json = (await res.json()) as { ok: boolean; description?: string };
   console.log(`${json.ok ? "✓" : "✗"} ${method}${json.ok ? "" : `: ${json.description}`}`);
   return json;

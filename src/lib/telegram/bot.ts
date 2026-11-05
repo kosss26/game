@@ -9,7 +9,7 @@ export class BotApiError extends Error {
 
 export async function callBot<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
   if (!config.botToken) throw new BotApiError(method, 0, "TELEGRAM_BOT_TOKEN не задан");
-  const res = await fetch(`https://api.telegram.org/bot${config.botToken}/${method}`, {
+  const res = await fetch(`${config.telegramApiUrl}/bot${config.botToken}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
