@@ -103,9 +103,10 @@ export function ChatPlayer(props: ChatPlayerProps) {
     if (h.length) return h[h.length - 1].thread || MAIN;
     return threadOf(rt.scenes[0]);
   });
-  const [viewOverride, setViewOverride] = useState<string | null>(null);
+  // Чат, который открыт у игрока. Сюжет может уйти в другой чат — тогда
+  // там появляется счётчик и уведомление, но экран сам не переключается.
+  const [view, setView] = useState<string>(activeThread);
   const [unread, setUnread] = useState<Record<string, number>>({});
-  const view = viewOverride ?? activeThread;
   const viewRef = useRef(view);
   viewRef.current = view;
   const [clueIds, setClueIds] = useState<string[]>(() => foundClues(props.initial?.flags || props.inheritedFlags, props.storyMeta));
@@ -238,7 +239,6 @@ export function ChatPlayer(props: ChatPlayerProps) {
         const sp = speedRef.current;
         const thread = step.kind === "end" ? null : threadOf(step.scene);
         if (thread) setActiveThread(thread);
-        if (step.kind === "choice" || step.kind === "input") setViewOverride(null);
 
         if (step.kind === "message") {
           const isNpc = step.scene.type === "message" && step.scene.speaker === "npc";
@@ -476,10 +476,10 @@ export function ChatPlayer(props: ChatPlayerProps) {
   const openThread = useCallback(
     (t: string) => {
       haptic("select");
-      setViewOverride(t === activeThread ? null : t);
+      setView(t);
       setToast(null);
     },
-    [activeThread, haptic]
+    [haptic]
   );
 
   const onScroll = () => {
@@ -553,7 +553,28 @@ export function ChatPlayer(props: ChatPlayerProps) {
   }, [log]);
 
   const hasClues = Object.keys(props.storyMeta?.clues || {}).length > 0;
-  const waitingElsewhere = threaded && view !== activeThread && (ui.kind === "choice" || ui.kind === "input" || ui.kind === "pause");
+  // Куда звать игрока из чата, который он сейчас читает: туда, где ждут ответа
+  // или идёт переписка, иначе — в последний чат с непрочитанными.
+  const busyThere = ui.kind === "choice" || ui.kind === "input" || ui.kind === "pause" || (ui.kind === "typing" && ui.thread === activeThread);
+  const lastUnread = useMemo(() => {
+    for (let i = log.length - 1; i >= 0; i--) {
+      const t = log[i].thread || MAIN;
+      if (t !== view && (unread[t] || 0) > 0) return t;
+    }
+    return null;
+  }, [log, unread, view]);
+  const target = !threaded
+    ? null
+    : activeThread !== view && (busyThere || (unread[activeThread] || 0) > 0)
+      ? activeThread
+      : lastUnread;
+  const waitingElsewhere = !!target && (view !== activeThread || ui.kind === "running" || ui.kind === "typing");
+  const elsewhereLabel =
+    target === activeThread && (ui.kind === "choice" || ui.kind === "input")
+      ? "Ответить"
+      : target === activeThread && ui.kind === "pause"
+        ? "Вернуться"
+        : "Новые сообщения";
 
   return (
     <div className="chat-bg relative flex h-[100dvh] flex-col overflow-hidden">
@@ -637,8 +658,9 @@ export function ChatPlayer(props: ChatPlayerProps) {
       <div className="glass relative z-20 border-t border-white/[0.06] pb-safe">
         {waitingElsewhere ? (
           <div className="px-3 pb-3 pt-2">
-            <button onClick={() => openThread(activeThread)} className="btn-primary w-full">
-              {ui.kind === "pause" ? "Вернуться" : "Ответить"} в «{getChat(activeThread).name}»
+            <button onClick={() => openThread(target!)} className="btn-primary w-full">
+              {elsewhereLabel} в «{getChat(target!).name}»
+              {(unread[target!] || 0) > 0 && <span className="ml-1.5 rounded-full bg-white/25 px-1.5 text-[12px]">{unread[target!]}</span>}
             </button>
           </div>
         ) : (
