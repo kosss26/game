@@ -135,6 +135,11 @@ export function StoryScreen({ storyId }: { storyId: string }) {
           </button>
         </section>
       )}
+      {view.freeAccess && !view.hasPass && days.length > 1 && !finished && (
+        <p className="mx-4 mt-6 flex items-center justify-center gap-2 rounded-2xl bg-accent/10 py-3 text-[14px] text-fg/90">
+          <Icon name="bolt" size={16} className="text-accent" /> Все главы открыты — без ожидания
+        </p>
+      )}
       {view.hasPass && (
         <p className="mx-4 mt-6 flex items-center justify-center gap-2 rounded-2xl bg-accent/10 py-3 text-[14px] text-fg/90">
           <Icon name="bolt" size={16} className="text-accent" /> Сезонный пропуск активен

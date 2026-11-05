@@ -23,6 +23,16 @@ function day(n: number, extra: Partial<Day> = {}): Day {
 const base = { now: NOW, defaultWaitHours: 12, purchases: [] as { product: "skip_day" | "season_pass"; day_number: number | null }[] };
 
 describe("computeAccess", () => {
+  it("бесплатный режим: следующая глава сразу после завершения, но по порядку", () => {
+    const r = computeAccess({
+      ...base,
+      freeAccess: true,
+      days: [day(1), day(2), day(3)],
+      progresses: [{ day_id: "d1", completed: true, completed_at: new Date(NOW - 60_000).toISOString() }],
+    });
+    expect(r.map(d => d.status)).toEqual(["completed", "available", "locked"]);
+  });
+
   it("новый игрок: день 1 доступен, остальные закрыты", () => {
     const r = computeAccess({ ...base, days: [day(1), day(2), day(3)], progresses: [] });
     expect(r.map(d => d.status)).toEqual(["available", "locked", "locked"]);

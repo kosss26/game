@@ -46,6 +46,8 @@ export interface StoryView {
   hasPass: boolean;
   prices: { skipDay: number; seasonPass: number };
   paymentsEnabled: boolean;
+  /** Бесплатный режим: все главы открыты */
+  freeAccess: boolean;
   endingsUnlocked: string[];
   shareLink: string;
   isGuest: boolean;
@@ -106,6 +108,7 @@ async function loadAccessContext(user: User | null, storyId: string) {
     purchases,
     now: Date.now(),
     isAdmin,
+    freeAccess: config.freeAccess,
     defaultWaitHours: config.defaultWaitHours,
   });
   return { allDays, progresses, purchases, access, isAdmin };
@@ -179,7 +182,8 @@ export async function getStoryView(token: string | null, storyId: string): Promi
     credits: user?.skip_credits ?? 0,
     hasPass: hasSeasonPass(ctx.purchases),
     prices: config.prices,
-    paymentsEnabled: !!config.botToken && !user?.is_guest,
+    paymentsEnabled: !!config.botToken && !user?.is_guest && !config.freeAccess,
+    freeAccess: config.freeAccess,
     endingsUnlocked: endings,
     shareLink: miniAppLink(user && !user.is_guest ? `ref_${user.telegram_id}` : undefined),
     isGuest: !!user?.is_guest,
