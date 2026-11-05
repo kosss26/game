@@ -415,7 +415,26 @@ const STYLES: Record<string, () => React.JSX.Element> = {
   mystery: Mystery,
 };
 
-export function CoverArt({ style, className = "" }: { style?: string | null; className?: string }) {
+const ILLUSTRATIONS: Record<string, string> = {
+  perseids: "petlya", winter: "beliy-shum", forest: "tihiy-chas", aurora: "severnoe-siyanie",
+};
+
+export function CoverArt({ style, className = "", thumbnail = false, priority = false }: { style?: string | null; className?: string; thumbnail?: boolean; priority?: boolean }) {
+  const cover = ILLUSTRATIONS[style || "forest"];
+  if (cover) {
+    // Decorative cover: the surrounding card already names the story.
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={`/story-covers/${cover}-${thumbnail ? 320 : 640}.webp`}
+        srcSet={thumbnail ? undefined : `/story-covers/${cover}-640.webp 640w, /story-covers/${cover}-1200.webp 1200w`}
+        sizes={thumbnail ? undefined : "(max-width: 480px) 100vw, 480px"}
+        width={thumbnail ? 320 : 1200} height={thumbnail ? 213 : 800}
+        alt="" className={`story-illustration ${className}`}
+        loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : undefined} decoding="async"
+      />
+    );
+  }
   const Art = STYLES[style || "forest"] || Forest;
   return (
     <svg viewBox="0 0 400 320" preserveAspectRatio="xMidYMid slice" className={className} aria-hidden="true">
