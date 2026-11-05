@@ -39,6 +39,22 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(d.account_id('https://dash.cloudflare.com/' + account + '/workers/services/view/battleship-relay'), account)
         with self.assertRaises(d.DeploymentError): d.account_id('https://other.invalid/' + account)
 
+    def test_token_input_accepts_token_quotes_bearer_and_cloudflare_curl(self):
+        token = 'cfut_fixture_token_at_least_20_chars'
+        for value in [token, '"' + token + '"', 'Bearer ' + token,
+                      'curl "https://api.cloudflare.com/client/v4/user/tokens/verify" -H "Authorization: Bearer ' + token + '"']:
+            self.assertEqual(d.token_value(value), token)
+        for value in ['', 'curl unrelated', 'bad token value']:
+            with self.assertRaises(d.DeploymentError): d.token_value(value)
+
+    def test_error_only_shows_numeric_codes_without_echoed_secret(self):
+        body = json.dumps({'errors': [{'code': 6003, 'message': 'private_fixture'}, {'code': 6111}]}).encode()
+        error = str(d.api_error(400, body))
+        self.assertIn('6111', error)
+        self.assertIn('формат', error)
+        self.assertNotIn('private_fixture', error)
+        self.assertNotIn('private_fixture', str(d.api_error(400, b'private_fixture')))
+
     def test_multipart_backup_parser(self):
         source = b'export default {fetch(){}};'
         body, kind = d.multipart({'main_module': 'worker.js'}, [('worker.js', 'application/javascript+module', source)])

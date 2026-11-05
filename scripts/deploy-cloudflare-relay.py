@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Interactive VPS deployment. Credentials stay in memory; modifies one named Worker."""
+import argparse
+import shlex
 import email.policy
 import getpass
 import fcntl
@@ -40,6 +42,46 @@ def account_id(value):
         if match:
             return match[1]
     raise DeploymentError('Нужна ссылка вида https://dash.cloudflare.com/<account-id>/workers/... или Account ID из 32 символов.')
+
+
+def token_value(value):
+    value = value.strip()
+    try:
+        parts = shlex.split(value)
+    except ValueError:
+        raise DeploymentError("Не удалось прочитать токен: скопируйте его ещё раз без обрезания.") from None
+    for part in parts:
+        match = re.fullmatch(r'Authorization:\s*Bearer\s+(.+)', part, re.I)
+        if match:
+            value = match[1].strip()
+            break
+    else:
+        if len(parts) == 1:
+            value = parts[0]
+        elif len(parts) == 2 and parts[0].lower() == 'bearer':
+            value = parts[1]
+    if not re.fullmatch(r'[A-Za-z0-9_.-]{20,512}', value):
+        raise DeploymentError("Не распознан API Token. Вставьте токен или полную проверочную команду curl из Cloudflare.")
+    return value
+
+
+def api_error(status, body):
+    # Only numeric codes and our own fixed messages are shown: API errors may echo secrets.
+    try:
+        codes = [item.get('code') for item in json.loads(body).get('errors', [])]
+        codes = [code for code in codes if type(code) is int]
+    except (ValueError, AttributeError, TypeError):
+        codes = []
+    detail = ('; коды ' + ', '.join(map(str, codes))) if codes else ''
+    if 6111 in codes or 6003 in codes:
+        hint = 'Неверный формат заголовка авторизации. Скопируйте API Token заново.'
+    elif status in (401, 403) or 10000 in codes:
+        hint = 'Токен не принят или не имеет доступа к этому аккаунту. Нужен Workers Scripts Edit.'
+    elif status == 404:
+        hint = 'Worker battleship-relay не найден в указанном аккаунте.'
+    else:
+        hint = 'Cloudflare отклонил запрос. Пришлите только эту строку ошибки.'
+    return DeploymentError(f'Cloudflare HTTP {status}{detail}. {hint}')
 
 
 def private_write(path, content):
@@ -94,7 +136,7 @@ class Cloudflare:
                 body, kind = response.read(), response.headers.get('Content-Type', '')
         except urllib.error.HTTPError as error:
             # Never print API bodies: they can echo uploaded secret values.
-            raise DeploymentError(f'Cloudflare HTTP {error.code}. Проверьте Account ID и право Workers Scripts Edit.') from None
+            raise api_error(error.code, error.read(16384)) from None
         except (urllib.error.URLError, TimeoutError):
             raise DeploymentError('Не удалось связаться с Cloudflare. Токен не сохранён.') from None
         if raw:
@@ -205,10 +247,11 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         raise DeploymentError('Публикация уже выполняется.') from None
-    account = account_id(input('Вставьте ссылку из адресной строки Cloudflare (или Account ID): '))
-    token = getpass.getpass('Временный Cloudflare API Token (ввод скрыт): ').strip()
-    if not token or any(c.isspace() for c in token):
-        raise DeploymentError('Пустой или неверный токен.')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--account', help='Cloudflare Account ID or dashboard URL')
+    args = parser.parse_args()
+    account = account_id(args.account or input('Вставьте ссылку из адресной строки Cloudflare (или Account ID): '))
+    token = token_value(getpass.getpass('Временный Cloudflare API Token или команда curl (ввод скрыт): '))
     client = Cloudflare(token, account)
     # Read permissions and identity are checked before changing local configuration.
     client.settings()
