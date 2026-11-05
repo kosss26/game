@@ -35,6 +35,8 @@ export interface AccessInput {
   purchases: Array<Pick<Purchase, "product" | "day_number">>;
   now: number;
   isAdmin?: boolean;
+  /** Бесплатный режим: без ожидания между главами */
+  freeAccess?: boolean;
   defaultWaitHours: number;
 }
 
@@ -45,7 +47,7 @@ export function hasSeasonPass(purchases: AccessInput["purchases"]): boolean {
 export function computeAccess(input: AccessInput): DayAccess[] {
   const days = [...input.days].filter(d => d.status === "published").sort((a, b) => a.day_number - b.day_number);
   const progressByDay = new Map(input.progresses.map(p => [p.day_id, p]));
-  const pass = hasSeasonPass(input.purchases);
+  const pass = hasSeasonPass(input.purchases) || !!input.freeAccess;
   const skipped = new Set(input.purchases.filter(p => p.product === "skip_day").map(p => p.day_number));
 
   const out: DayAccess[] = [];

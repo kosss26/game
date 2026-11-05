@@ -37,6 +37,11 @@ export const config = {
     seasonPass: parseInt(process.env.PRICE_SEASON_PASS_STARS || "99", 10),
   },
   referralBonus: parseInt(process.env.REFERRAL_BONUS_SKIPS || "1", 10),
+  /**
+   * Бесплатный режим: все главы открываются сразу, без ожидания и оплаты.
+   * Сейчас включён по умолчанию; выключить — FREE_ACCESS=false в файле настроек.
+   */
+  freeAccess: process.env.FREE_ACCESS !== "false",
   defaultWaitHours: parseFloat(process.env.DEFAULT_WAIT_HOURS || "12"),
 };
 
