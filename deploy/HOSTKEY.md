@@ -54,6 +54,17 @@ bash /opt/polnoch-stories/deploy/hostkey.sh bot
 с ненулевым кодом. Команда задаёт webhook, меню, команды и описание, не отправляя
 сообщений пользователям. Проверьте приложение кнопкой «Истории» в Telegram.
 
+## Обновление
+
+```bash
+bash /opt/polnoch-stories/deploy/hostkey.sh update
+```
+
+Делает резервную копию базы (`/var/lib/polnoch-stories/backups/before-update-*.dump`),
+выполняет `git pull --ff-only` этой ветки, пересобирает только этот проект,
+дожидается health check и загружает новые/изменённые истории (`seed` идемпотентен,
+прогресс игроков не трогается). Другие проекты и nginx не затрагиваются.
+
 ## Изоляция и данные
 
 - Код: `/opt/polnoch-stories`.

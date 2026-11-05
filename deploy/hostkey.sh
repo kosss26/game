@@ -16,7 +16,7 @@ MODE=${1:-status}
 die() { printf '\nОШИБКА: %s\n' "$*" >&2; exit 1; }
 say() { printf '\n== %s\n' "$*"; }
 [[ $EUID == 0 ]] || die 'Запустите от root'
-case "$MODE" in init|install|bot|status|renew) ;; *) die 'Режимы: init | install | bot | status | renew' ;; esac
+case "$MODE" in init|install|update|bot|status|renew) ;; *) die 'Режимы: init | install | update | bot | status | renew' ;; esac
 for cmd in docker git python3 curl openssl flock ss; do command -v "$cmd" >/dev/null || die "Не найдена команда $cmd"; done
 [[ ! -L "$STATE" && ! -L /etc/polnoch-stories && ! -L "$ACME" ]] || die 'Каталоги установки не должны быть символическими ссылками'
 mkdir -p "$STATE" /etc/polnoch-stories
@@ -208,9 +208,38 @@ PYDOMAIN
   curl -fsS --max-time 20 "https://$(get_env DOMAIN)/api/health"
   printf '\nГотово: https://%s\nСтудия: https://%s/admin/login\nПароль: %s/admin-login.txt\nНастройка отдельного бота: bash %s/deploy/hostkey.sh bot\n' "$(get_env DOMAIN)" "$(get_env DOMAIN)" "$STATE" "$ROOT"
 }
+update_app() {
+  ready
+  [[ -z $(git -C "$ROOT" status --porcelain) ]] || die 'В исходниках есть локальные изменения: обновление остановлено'
+  say 'Резервная копия базы перед обновлением'
+  mkdir -p "$STATE/backups"
+  local dump="$STATE/backups/before-update-$(date -u +%Y%m%d-%H%M%S).dump"
+  compose exec -T db pg_dump -U polnoch -d polnoch -Fc > "$dump.tmp" || { rm -f "$dump.tmp"; die 'Не удалось сделать резервную копию'; }
+  mv "$dump.tmp" "$dump"
+  printf 'Копия: %s\n' "$dump"
+  say 'Получаю обновления'
+  local before after
+  before=$(git -C "$ROOT" rev-parse HEAD)
+  git -C "$ROOT" pull --ff-only origin "$BRANCH"
+  after=$(git -C "$ROOT" rev-parse HEAD)
+  [[ "$before" != "$after" ]] || printf 'Новых изменений нет, пересобираю текущую версию\n'
+  compose config --quiet
+  say 'Собираю новую версию'
+  compose build app tools
+  say 'Перезапускаю приложение'
+  compose up -d --no-build db app
+  wait_health
+  say 'Загружаю истории'
+  compose run --rm --no-deps tools npm run seed
+  touch "$STATE/seeded"
+  compose up -d --no-build cron backup
+  curl -fsS --max-time 20 "https://$(get_env DOMAIN)/api/health" || true
+  printf '\nОбновлено до %s\n' "$(git -C "$ROOT" log --oneline -1)"
+}
 case "$MODE" in
   init) init ;;
   install) install_app ;;
+  update) update_app ;;
   bot)
     ready
     curl -fsS --max-time 20 "https://$(get_env DOMAIN)/api/health" >/dev/null
