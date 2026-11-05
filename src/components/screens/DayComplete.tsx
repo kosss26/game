@@ -83,12 +83,12 @@ export function DayComplete(p: Props) {
       <div className="relative mx-auto max-w-md px-5 pb-10 pt-safe">
         <div className="pt-14 text-center animate-slide-up">
           <span className="chip bg-white/10 text-fg/80">
-            {p.storyTitle} · День {p.dayNumber}
+            {p.storyTitle} · Глава {p.dayNumber}
           </span>
           <h1 className="mt-4 font-display text-[32px] font-bold leading-tight tracking-tight text-fg">
             {p.isLastDay && endingMeta ? endingMeta.title : `«${p.dayTitle}»`}
           </h1>
-          <p className="mt-1 text-[15px] text-muted">{p.isLastDay ? "История завершена" : "День завершён"}</p>
+          <p className="mt-1 text-[15px] text-muted">{p.isLastDay ? "История завершена" : "Глава завершена"}</p>
         </div>
 
         {(endingMeta?.description || p.recap) && (
@@ -97,7 +97,7 @@ export function DayComplete(p: Props) {
           </blockquote>
         )}
 
-        {/* Следующий день */}
+        {/* Следующая глава */}
         {!p.isLastDay && (
           <section className="mt-6 card p-5 animate-slide-up" style={{ animationDelay: "120ms" }}>
             {!view ? (
@@ -117,9 +117,9 @@ export function DayComplete(p: Props) {
               />
             ) : (
               <div className="text-center">
-                <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-faint">День {p.dayNumber + 1}</p>
+                <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-faint">Глава {p.dayNumber + 1}</p>
                 <p className="mt-2 text-[16px] font-medium text-fg">Скоро продолжение</p>
-                <p className="mt-1 text-[14px] text-muted">Мы пришлём сообщение в Telegram, как только новый день откроется.</p>
+                <p className="mt-1 text-[14px] text-muted">Мы пришлём сообщение в Telegram, как только откроется новая глава.</p>
               </div>
             )}
           </section>
@@ -138,7 +138,7 @@ export function DayComplete(p: Props) {
                 </span>
               ))}
             </div>
-            {!p.isLastDay && <p className="mt-3 text-[13px] text-muted">Улики переходят в следующие дни. Иногда важнее то, о чём промолчали.</p>}
+            {!p.isLastDay && <p className="mt-3 text-[13px] text-muted">Улики переходят в следующие главы. Иногда важнее то, о чём промолчали.</p>}
           </section>
         )}
 
@@ -260,7 +260,7 @@ function NextDay({
   const playable = next.status === "available" || next.status === "in_progress";
   return (
     <div>
-      <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-faint">Далее · День {next.dayNumber}</p>
+      <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-faint">Далее · Глава {next.dayNumber}</p>
       <p className="mt-1.5 text-[18px] font-semibold text-fg">{next.title}</p>
       {teaser && <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted">{teaser}</p>}
 
@@ -297,13 +297,13 @@ function NextDay({
               </button>
             )}
           </div>
-          <p className="mt-3 text-center text-[12.5px] text-faint">Пришлём уведомление в Telegram, когда день откроется</p>
+          <p className="mt-3 text-center text-[12.5px] text-faint">Пришлём уведомление в Telegram, когда глава откроется</p>
         </>
       )}
 
       {next.status === "not_released" && next.unlocksAt && (
         <p className="mt-4 text-[14px] text-muted">
-          Выход нового дня: <Countdown until={next.unlocksAt} compact onDone={onReady} />
+          Выход новой главы: <Countdown until={next.unlocksAt} compact onDone={onReady} />
         </p>
       )}
       {error && <p className="mt-3 text-center text-[13px] text-danger">{error}</p>}

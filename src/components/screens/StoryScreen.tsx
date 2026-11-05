@@ -12,6 +12,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Countdown } from "@/components/ui/Countdown";
 import { ErrorState, FullscreenLoader } from "@/components/ui/States";
 import { useUnlock } from "./useUnlock";
+import { chaptersLabel } from "@/lib/utils/plural";
 
 export function StoryScreen({ storyId }: { storyId: string }) {
   const router = useRouter();
@@ -70,7 +71,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
       <div className="relative -mt-28 px-5">
         <div className="flex flex-wrap gap-1.5">
           {meta.genre && <span className="chip bg-white/10 text-fg/85">{meta.genre}</span>}
-          <span className="chip bg-white/10 text-fg/85">{days.length + view.upcomingDays} дней</span>
+          <span className="chip bg-white/10 text-fg/85">{chaptersLabel(days.length + view.upcomingDays)}</span>
           <span className="chip bg-white/10 text-fg/85">~{totalMinutes} мин</span>
           {meta.age_rating && <span className="chip bg-white/10 text-fg/85">{meta.age_rating}</span>}
         </div>
@@ -97,10 +98,10 @@ export function StoryScreen({ storyId }: { storyId: string }) {
         </section>
       )}
 
-      {/* Дни */}
+      {/* Главы */}
       <section className="mt-8 px-4">
         <h2 className="mb-3 px-1 text-[13px] font-semibold uppercase tracking-[0.1em] text-faint">
-          Дни · {completed}/{days.length + view.upcomingDays}
+          Главы · {completed}/{days.length + view.upcomingDays}
         </h2>
         <ol className="space-y-2">
           {days.map(d => (
@@ -111,7 +112,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.04] text-faint">
                 <Icon name="sparkle" size={18} />
               </span>
-              <span className="text-[14.5px] text-faint">День {days.length + i + 1} · скоро</span>
+              <span className="text-[14.5px] text-faint">Глава {days.length + i + 1} · скоро</span>
             </li>
           ))}
         </ol>
@@ -127,7 +128,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
             </span>
             <div className="min-w-0">
               <p className="text-[16px] font-semibold text-fg">Без ожидания</p>
-              <p className="mt-0.5 text-[13.5px] leading-snug text-muted">Все дни этой истории открываются сразу после предыдущего. Один раз и навсегда.</p>
+              <p className="mt-0.5 text-[13.5px] leading-snug text-muted">Все главы этой истории открываются сразу после предыдущей. Один раз и навсегда.</p>
             </div>
           </div>
           <button className="btn-primary mt-4 w-full" disabled={unlock.busy} onClick={() => unlock.buy("season_pass")}>
@@ -182,7 +183,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
           <span />
         )}
       </section>
-      {!view.isGuest && (
+      {!view.isGuest && !view.freeAccess && (
         <p className="mx-6 mt-2 text-center text-[12.5px] text-faint">
           Друг по вашей ссылке = бесплатный пропуск ожидания{view.credits > 0 ? ` · у вас ${view.credits}` : ""}
         </p>
@@ -194,11 +195,11 @@ export function StoryScreen({ storyId }: { storyId: string }) {
           {current ? (
             <Link href={`/play/${storyId}/${current.dayNumber}`} className="btn-primary w-full text-[16px]">
               <Icon name="play" size={16} />
-              {current.status === "in_progress" ? `Продолжить · День ${current.dayNumber}` : completed === 0 ? "Начать историю" : `Читать · День ${current.dayNumber}`}
+              {current.status === "in_progress" ? `Продолжить · Глава ${current.dayNumber}` : completed === 0 ? "Начать историю" : `Продолжить · Глава ${current.dayNumber}`}
             </Link>
           ) : waiting?.unlocksAt ? (
             <div className="btn-secondary w-full cursor-default">
-              <Icon name="clock" size={17} /> День {waiting.dayNumber} через&nbsp;
+              <Icon name="clock" size={17} /> Глава {waiting.dayNumber} через&nbsp;
               <Countdown until={waiting.unlocksAt} compact onDone={load} />
             </div>
           ) : finished ? (
@@ -246,14 +247,14 @@ function DayRow({
       {badge}
       <div className="min-w-0 flex-1">
         <p className={`truncate text-[15.5px] font-medium ${playable ? "text-fg" : "text-muted"}`}>
-          <span className="text-faint">День {day.dayNumber} · </span>
+          <span className="text-faint">Глава {day.dayNumber} · </span>
           {day.title}
         </p>
         <p className="text-[12.5px] text-faint">
-          {day.status === "completed" && "Пройден · перечитать"}
+          {day.status === "completed" && "Пройдена · перечитать"}
           {day.status === "in_progress" && "В процессе"}
           {day.status === "available" && `~${day.minutes || 12} мин`}
-          {day.status === "locked" && "Откроется после предыдущего дня"}
+          {day.status === "locked" && "Откроется после предыдущей главы"}
           {day.status === "waiting" && day.unlocksAt && (
             <>
               Откроется через <Countdown until={day.unlocksAt} compact onDone={onReady} />
