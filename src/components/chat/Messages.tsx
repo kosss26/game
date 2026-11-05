@@ -24,6 +24,9 @@ type Attachment =
   | { kind: "file"; name: string; body: string }
   | { kind: "fwd"; from: string; body: string }
   | { kind: "deleted"; body: string }
+  | { kind: "cam"; label: string; body: string }
+  | { kind: "call"; duration: string; body: string }
+  | { kind: "missed"; body: string }
   | { kind: "text"; body: string };
 
 export function parseAttachment(text: string): Attachment {
@@ -50,6 +53,15 @@ export function parseAttachment(text: string): Attachment {
     case "удалено":
     case "deleted":
       return { kind: "deleted", body };
+    case "камера":
+    case "cam":
+      return { kind: "cam", label: arg || "КАМ", body };
+    case "звонок":
+    case "call":
+      return { kind: "call", duration: arg || "", body };
+    case "пропущенный":
+    case "missed":
+      return { kind: "missed", body };
     default:
       return { kind: "text", body: text };
   }
@@ -71,6 +83,12 @@ export function previewText(text: string): string {
       return `↪ ${a.body}`;
     case "deleted":
       return "Сообщение удалено";
+    case "cam":
+      return `📹 Камера ${a.label}`;
+    case "call":
+      return `📞 Звонок ${a.duration}`;
+    case "missed":
+      return "📵 Пропущенный звонок";
     default:
       return a.body;
   }
@@ -162,6 +180,35 @@ function AttachmentBody({ a, out, fresh, at }: { a: Attachment; out?: boolean; f
       );
     case "deleted":
       return <Deleted body={a.body} fresh={fresh} at={at} />;
+    case "cam":
+      return <CamFrame label={a.label} body={a.body} at={at} />;
+    case "call":
+      return (
+        <div className="w-[min(250px,64vw)]">
+          <div className="flex items-center gap-3">
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${out ? "bg-white/20" : "bg-ok/20 text-ok"}`}>
+              <Icon name="phone" size={18} />
+            </span>
+            <span>
+              <span className="block text-[14.5px] font-medium">{out ? "Исходящий звонок" : "Входящий звонок"}</span>
+              {a.duration && <span className={`block text-[12.5px] ${muted}`}>{a.duration}</span>}
+            </span>
+          </div>
+          {a.body && <p className={`mt-2 whitespace-pre-wrap text-[14px] leading-snug ${out ? "text-white/90" : "text-fg/85"}`}>{a.body}</p>}
+        </div>
+      );
+    case "missed":
+      return (
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger/20 text-danger">
+            <Icon name="phoneMissed" size={18} />
+          </span>
+          <span>
+            <span className="block text-[14.5px] font-medium">Пропущенный звонок</span>
+            {a.body && <span className={`block text-[12.5px] ${muted}`}>{a.body}</span>}
+          </span>
+        </div>
+      );
     default:
       return <>{a.body}</>;
   }
@@ -184,7 +231,33 @@ function Deleted({ body, fresh, at }: { body: string; fresh: boolean; at: number
 }
 
 function isRich(a: Attachment) {
-  return a.kind === "photo" || a.kind === "voice" || a.kind === "geo" || a.kind === "file" || a.kind === "fwd";
+  return ["photo", "voice", "geo", "file", "fwd", "cam", "call", "missed"].includes(a.kind);
+}
+
+/** Кадр камеры видеонаблюдения */
+function CamFrame({ label, body, at }: { label: string; body: string; at: number }) {
+  const d = new Date(at);
+  const ts = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+  return (
+    <div className="-mx-1.5 -mt-0.5 mb-1 w-[min(260px,66vw)] overflow-hidden rounded-xl ring-1 ring-white/10">
+      <div
+        className="relative min-h-[120px] p-3 font-mono text-[12.5px] leading-snug text-[#c8e6c0]"
+        style={{
+          background: "radial-gradient(120% 90% at 50% 40%, #1d2a22 0%, #0b100d 100%)",
+          backgroundImage:
+            "repeating-linear-gradient(0deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 3px), radial-gradient(120% 90% at 50% 40%, #1d2a22 0%, #0b100d 100%)",
+        }}
+      >
+        <div className="mb-2 flex items-center justify-between text-[11px] uppercase tracking-wider text-[#9fc79a]">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 animate-pulse-soft rounded-full bg-danger" /> REC · {label}
+          </span>
+          <span className="tabular-nums">{ts}</span>
+        </div>
+        <p className="whitespace-pre-wrap">{body}</p>
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------

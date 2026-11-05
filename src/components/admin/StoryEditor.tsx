@@ -179,6 +179,7 @@ export function StoryEditor({ story }: StoryEditorProps) {
           >
             <option value="forest">Лес / санаторий</option>
             <option value="winter">Зимнее озеро</option>
+            <option value="aurora">Ночной город, сияние</option>
             <option value="noir">Нуар</option>
             <option value="romance">Романтика</option>
             <option value="thriller">Триллер</option>

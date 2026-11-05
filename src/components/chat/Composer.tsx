@@ -8,11 +8,60 @@ import { formatDuration, useNow } from "@/components/ui/Countdown";
 
 type Option = SnapshotChoice & { text: string };
 
-export function ChoicePanel({ prompt, options, onSelect }: { prompt: string | null; options: Option[]; onSelect: (o: Option) => void }) {
+export function ChoicePanel({
+  prompt,
+  options,
+  onSelect,
+  timerMs,
+  defaultId,
+  onTick,
+}: {
+  prompt: string | null;
+  options: Option[];
+  onSelect: (o: Option, timedOut?: boolean) => void;
+  timerMs?: number | null;
+  defaultId?: string | null;
+  onTick?: () => void;
+}) {
   const [picked, setPicked] = useState<string | null>(null);
+  const [started] = useState(() => Date.now());
+  const now = useNow(timerMs ? 100 : 60_000);
+  const left = timerMs ? Math.max(0, timerMs - (now - started)) : 0;
+  const secLeft = Math.ceil(left / 1000);
+  const lastSec = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!timerMs || picked) return;
+    if (secLeft !== lastSec.current) {
+      lastSec.current = secLeft;
+      if (secLeft <= 3 && secLeft > 0) onTick?.();
+    }
+    if (left <= 0) {
+      const def = options.find(o => o.id === defaultId) || options[options.length - 1];
+      setPicked(def.id);
+      onSelect(def, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [left, timerMs, picked]);
+
   return (
     <div className="animate-sheet-up px-3 pb-3 pt-2">
-      {prompt && <p className="mb-2 px-1 text-center text-[12.5px] font-medium uppercase tracking-[0.08em] text-faint">{prompt}</p>}
+      {timerMs ? (
+        <div className="mb-2.5 px-1">
+          <div className="mb-1.5 flex items-center justify-between">
+            <p className="text-[12.5px] font-semibold uppercase tracking-[0.08em] text-danger/90">{prompt || "Решай быстро"}</p>
+            <span className={`text-[13px] font-bold tabular-nums ${secLeft <= 3 ? "animate-pulse-soft text-danger" : "text-fg/80"}`}>{secLeft}</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+            <div
+              className={`h-full rounded-full ${left / timerMs < 0.3 ? "bg-danger" : "bg-warn"}`}
+              style={{ width: `${(left / timerMs) * 100}%`, transition: "width 100ms linear" }}
+            />
+          </div>
+        </div>
+      ) : (
+        prompt && <p className="mb-2 px-1 text-center text-[12.5px] font-medium uppercase tracking-[0.08em] text-faint">{prompt}</p>
+      )}
       <div className="flex flex-col gap-2">
         {options.map((o, i) => {
           const action = isActionChoice(o.text);

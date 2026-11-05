@@ -38,6 +38,8 @@
  *   - Я помогу [set trust += 1]     без перехода — продолжение после блока
  *   - (Промолчать) -> silent        в скобках — действие, не отправляется в чат
  *   - Секрет [if knows_secret]      вариант виден только при условии
+ *   CHOICE: Быстрее! [timer 10s]    выбор на время
+ *   - (Замереть) [default]          выбирается, если время вышло (иначе — последний)
  *
  *   INPUT name: Как тебя зовут?     ввод текста в флаг name
  *   INPUT: Вопрос -> goto tag [set x=1]   (формат v1)
@@ -240,8 +242,13 @@ function splitOps(s: string): string[] {
 }
 
 /** Разбор строки варианта выбора */
-function parseOption(body: string): { label: string; gotoTag: string | null; setFlags: Flags; condition: string | null; errors: string[] } {
+function parseOption(body: string): { label: string; gotoTag: string | null; setFlags: Flags; condition: string | null; isDefault: boolean; errors: string[] } {
   let rest = body.trim();
+  let isDefault = false;
+  rest = rest.replace(/\[default\]/gi, () => {
+    isDefault = true;
+    return " ";
+  });
   let setFlags: Flags = {};
   let condition: string | null = null;
   const errors: string[] = [];
@@ -269,7 +276,7 @@ function parseOption(body: string): { label: string; gotoTag: string | null; set
     rest = rest.slice(0, g.index).trim();
   }
 
-  return { label: rest, gotoTag, setFlags, condition, errors };
+  return { label: rest, gotoTag, setFlags, condition, isDefault, errors };
 }
 
 export function parseScript(script: string, options: ParseOptions = {}): ParseResult {
@@ -439,6 +446,7 @@ export function parseScript(script: string, options: ParseOptions = {}): ParseRe
           err(lineNumber, "Пустой текст варианта", line);
           continue;
         }
+        if (opt.isDefault) scenes[choiceSceneIndex].meta.default_choice = choiceSort;
         choices.push({
           sceneIndex: choiceSceneIndex,
           label: opt.label,
@@ -555,11 +563,16 @@ export function parseScript(script: string, options: ParseOptions = {}): ParseRe
         continue;
       }
       if ((m = line.match(RE.choice))) {
-        const prompt = m[1].trim();
-        choiceSceneIndex = push(
-          { type: "choice", speaker: null, text: prompt || null, meta: prompt ? { prompt } : {} },
-          lineNumber
-        );
+        let prompt = m[1].trim();
+        let timer: number | null = null;
+        const tm = prompt.match(/\[timer\s+(\d+(?:\.\d+)?)\s*(ms|s)?\]/i);
+        if (tm) {
+          timer = toMs(tm[1], tm[2], "s");
+          prompt = prompt.replace(tm[0], "").trim();
+        }
+        const meta: SceneMeta = prompt ? { prompt } : {};
+        if (timer) meta.timer_ms = timer;
+        choiceSceneIndex = push({ type: "choice", speaker: null, text: prompt || null, meta }, lineNumber);
         choiceSort = 0;
         continue;
       }

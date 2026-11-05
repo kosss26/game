@@ -27,6 +27,8 @@ export interface Character {
   status?: string;
   /** Короткое описание для страницы истории */
   bio?: string;
+  /** Система/бот: сообщения приходят без «печатает…» */
+  bot?: boolean;
 }
 
 /** Чат (тред) внутри истории: групповой или личный */
@@ -42,6 +44,17 @@ export interface ChatConfig {
   color?: string;
   initials?: string;
   status?: string;
+}
+
+/** Шкала в шапке чата: значение берётся из числового флага с тем же id */
+export interface Meter {
+  label: string;
+  max: number;
+  color?: string;
+  /** Показывать, только когда этот флаг истинен (по умолчанию — когда флаг-значение задан) */
+  show_when?: string;
+  /** Чем больше, тем хуже (красная пульсация при росте) */
+  danger?: boolean;
 }
 
 /** Улика для блокнота: найдена, если флаг clue_<id> истинен */
@@ -74,6 +87,8 @@ export interface StoryMeta {
   chats?: Record<string, ChatConfig>;
   /** Улики для блокнота */
   clues?: Record<string, Clue>;
+  /** Шкалы (тревога, доверие и т.п.) */
+  meters?: Record<string, Meter>;
 }
 
 export interface Story {
@@ -140,6 +155,10 @@ export interface SceneMeta {
   input_placeholder?: string;
   /** Текст подсказки над вариантами выбора */
   prompt?: string;
+  /** Таймер выбора (мс) */
+  timer_ms?: number;
+  /** sort_index варианта по умолчанию (при истечении таймера) */
+  default_choice?: number;
   /** id концовки (для end) */
   ending?: string;
   /** Чат, в котором показывается сцена */

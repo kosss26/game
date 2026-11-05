@@ -219,3 +219,17 @@ describe("род игрока и архив", () => {
     expect(step.kind === "message" && step.typingMs).toBe(0);
   });
 });
+
+describe("выбор на время", () => {
+  it("defaultId — помеченный вариант, иначе последний видимый", () => {
+    const rt = buildRuntime(snapshotFrom("CHOICE: Быстро [timer 5s]\n- A\n- B [default]\n- C\nNPC: x"));
+    const st = resolve(rt, rt.firstSceneId, {}).step;
+    expect(st.kind === "choice" && st.timerMs).toBe(5000);
+    expect(st.kind === "choice" && st.options.find(o => o.id === st.defaultId)?.label).toBe("B");
+    const rt2 = buildRuntime(snapshotFrom("CHOICE: Быстро [timer 5s]\n- A\n- B [default] [if never]\n- C\nNPC: x"));
+    const st2 = resolve(rt2, rt2.firstSceneId, {}).step;
+    expect(st2.kind === "choice" && st2.options.find(o => o.id === st2.defaultId)?.label).toBe("C");
+    const st3 = resolve(buildRuntime(snapshotFrom("CHOICE:\n- A\nNPC: x")), "s0", {}).step;
+    expect(st3.kind === "choice" && st3.timerMs).toBeNull();
+  });
+});

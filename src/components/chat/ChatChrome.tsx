@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import type { Character, ChatConfig, StoryMeta } from "@/lib/types/database";
+import { useEffect, useRef, useState } from "react";
+import type { Character, ChatConfig, Flags, Meter, StoryMeta } from "@/lib/types/database";
 import { Avatar } from "@/components/ui/Avatar";
 import { Icon } from "@/components/ui/Icon";
 
@@ -148,6 +148,60 @@ export function ClueSheet({ meta, found, onClose }: { meta?: StoryMeta; found: s
           Закрыть
         </button>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Шкалы (тревога и т.п.)
+// ---------------------------------------------------------------------------
+
+export function MeterBar({ meters, flags }: { meters: Record<string, Meter>; flags: Flags }) {
+  const visible = Object.entries(meters).filter(([id, m]) => {
+    if (m.show_when) return !!flags[m.show_when];
+    return typeof flags[id] === "number";
+  });
+  const prev = useRef<Record<string, number>>({});
+  const [flash, setFlash] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const changed: Record<string, number> = {};
+    for (const [id] of visible) {
+      const v = Number(flags[id] || 0);
+      const p = prev.current[id];
+      if (p !== undefined && v !== p) changed[id] = v > p ? 1 : -1;
+      prev.current[id] = v;
+    }
+    if (Object.keys(changed).length) {
+      setFlash(changed);
+      const t = setTimeout(() => setFlash({}), 1400);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flags]);
+  if (visible.length === 0) return null;
+  return (
+    <div className="flex gap-2 px-3 pb-2">
+      {visible.map(([id, m]) => {
+        const v = Math.max(0, Math.min(m.max, Number(flags[id] || 0)));
+        const color = m.color || "#f5b452";
+        const f = flash[id];
+        return (
+          <div
+            key={id}
+            className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-white/[0.04] px-2.5 py-1.5 ring-1 transition ${
+              f ? (f > 0 === !!m.danger ? "ring-danger/60 animate-pulse-soft" : "ring-ok/50") : "ring-white/[0.05]"
+            }`}
+          >
+            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">{m.label}</span>
+            <span className="flex flex-1 gap-[3px]">
+              {Array.from({ length: m.max }, (_, i) => (
+                <span key={i} className="h-2 flex-1 rounded-sm" style={{ background: i < v ? color : "rgba(255,255,255,0.08)" }} />
+              ))}
+            </span>
+            <span className="shrink-0 text-[11px] font-bold tabular-nums text-fg/80">{v}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

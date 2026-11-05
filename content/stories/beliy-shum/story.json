@@ -65,7 +65,7 @@
       }
     },
     "chats": {
-      "group": { "name": "Селигер ❄️ 9 лет", "kind": "group", "members": ["lera", "mark", "dima", "kira", "polina"], "color": "#3f6b8c", "initials": "❄" },
+      "group": { "name": "Селигер ❄️ 9 лет", "kind": "group", "members": ["lera", "mark", "dima", "kira", "polina"], "also": ["stepan"], "color": "#3f6b8c", "initials": "❄" },
       "lera": { "name": "Лера", "kind": "dm", "character": "lera" },
       "mark": { "name": "Марк", "kind": "dm", "character": "mark" },
       "polina": { "name": "Полина", "kind": "dm", "character": "polina" },

@@ -34,15 +34,28 @@ describe.each(stories.map(s => [s.slug, s] as const))("контент: %s", (_sl
     expect(story.days.map(d => d.number)).toEqual(story.days.map((_, i) => i + 1));
   });
 
-  it("все тексты без незакрытых подстановок, кроме флагов игрока", () => {
+  it("подстановки {flag} ссылаются только на флаги, которые где-то задаются", () => {
+    const assigned = new Set<string>(["name"]);
     for (const { snap } of snapshots) {
-      for (const s of snap.scenes) {
-        for (const m of (s.text || "").matchAll(/\{([^}|]+)\}/g)) expect(["name"]).toContain(m[1]);
+      for (const sc of snap.scenes) {
+        if (sc.meta?.input_key) assigned.add(sc.meta.input_key);
+        for (const op of sc.meta?.ops || []) {
+          const m = op.replace(/^flag:/i, "").match(/^!?\s*([\p{L}_][\p{L}\p{N}_.]*)/u);
+          if (m) assigned.add(m[1]);
+        }
+      }
+      for (const c of snap.choices) for (const k of Object.keys(c.set_flags || {})) assigned.add(k);
+    }
+    const unknown: string[] = [];
+    for (const { n, snap } of snapshots) {
+      for (const sc of snap.scenes) {
+        for (const m of (sc.text || "").matchAll(/\{([^}|]+)\}/g)) if (!assigned.has(m[1])) unknown.push(`день ${n}: {${m[1]}}`);
       }
     }
+    expect(unknown).toEqual([]);
   });
 
-  it("в личных чатах пишет только их собеседник", () => {
+  it("в каждом чате пишут только его участники", () => {
     const problems: string[] = [];
     for (const d of story.days) {
       const r = parseDayScript(d.script, characters, story.meta.chats || {});
@@ -51,7 +64,12 @@ describe.each(stories.map(s => [s.slug, s] as const))("контент: %s", (_sl
       for (const sc of r.scenes) {
         if (sc.type !== "message" || sc.speaker !== "npc" || !sc.meta.thread) continue;
         const c = chats[sc.meta.thread];
-        if (!c || c.kind === "group") continue;
+        if (!c) continue;
+        if (c.kind === "group") {
+          const allowed = [...(c.members || []), ...(c.also || [])];
+          if (!allowed.includes(sc.meta.character || "")) problems.push(`${d.file}:${sc.line} ${sc.meta.character} пишет в группу «${c.name}»`);
+          continue;
+        }
         if (c.character !== sc.meta.character && !(c.also || []).includes(sc.meta.character || "")) problems.push(`${d.file}:${sc.line} ${sc.meta.character} пишет в чат «${c.name}»`);
       }
     }

@@ -6,7 +6,7 @@ import { applyChoice, applyInput, buildRuntime, isActionChoice, nextAfter, resol
 import { saveProgress, recordChoice, completeDay } from "@/lib/actions/player";
 import { useApp, useBackButton, type Speed } from "@/lib/telegram/TelegramProvider";
 import { MessageList, TypingBubble, DayDivider, previewText } from "./Messages";
-import { ThreadTabs, ClueSheet, Toast, type ToastData } from "./ChatChrome";
+import { ThreadTabs, ClueSheet, Toast, MeterBar, type ToastData } from "./ChatChrome";
 import { ChoicePanel, InputPanel, PausePanel, IdleComposer } from "./Composer";
 import { Avatar } from "@/components/ui/Avatar";
 import { Icon } from "@/components/ui/Icon";
@@ -61,7 +61,7 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 export function ChatPlayer(props: ChatPlayerProps) {
   const { storyId, dayId, dayNumber, dayTitle, version, snapshot, characters, preview, onExit, onComplete } = props;
-  const { token, haptic, speed, setSpeed, webApp } = useApp();
+  const { token, haptic, speed, setSpeed, timers, setTimers, webApp } = useApp();
   const rt = useMemo(() => buildRuntime(snapshot), [snapshot]);
 
   const defaultCharacter = useMemo(() => {
@@ -110,6 +110,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
   viewRef.current = view;
   const [clueIds, setClueIds] = useState<string[]>(() => foundClues(props.initial?.flags || props.inheritedFlags, props.storyMeta));
   const clueRef = useRef(clueIds);
+  const [hudFlags, setHudFlags] = useState<Flags>(() => props.initial?.flags || props.inheritedFlags);
   const animateFrom = useRef(props.initial?.history.length || 0);
 
   const logRef = useRef<HistoryEntry[]>(log);
@@ -181,6 +182,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
   /** Новые улики → тост */
   const syncClues = useCallback(
     (flags: Flags) => {
+      if (props.storyMeta?.meters) setHudFlags(flags);
       const now = foundClues(flags, props.storyMeta);
       const fresh = now.filter(id => !clueRef.current.includes(id));
       if (now.length !== clueRef.current.length) {
@@ -243,12 +245,13 @@ export function ChatPlayer(props: ChatPlayerProps) {
           const who = step.scene.meta?.character || defaultCharacter;
           if (step.delayMs) await sleep(step.delayMs * sp);
           if (!alive()) return;
-          if (isNpc && step.typingMs > 0 && sp > 0) {
+          const isBot = !!allCharacters[who]?.bot;
+          if (isNpc && !isBot && step.typingMs > 0 && sp > 0) {
             lastSpeaker.current = who;
             setUi({ kind: "typing", who, thread: thread || MAIN });
             await sleep(step.typingMs * sp);
           } else {
-            await sleep(sp === 0 || step.scene.meta?.past ? 30 : step.scene.speaker === "me" ? 500 * sp : 350 * sp);
+            await sleep(sp === 0 || step.scene.meta?.past ? 30 : step.scene.speaker === "me" ? 500 * sp : isBot ? 900 * sp : 350 * sp);
           }
           if (!alive()) return;
           append({
@@ -378,10 +381,10 @@ export function ChatPlayer(props: ChatPlayerProps) {
 
   // --- выбор / ввод ---
   const onChoice = useCallback(
-    async (option: SnapshotChoice & { text: string }) => {
+    async (option: SnapshotChoice & { text: string }, timedOut?: boolean) => {
       if (ui.kind !== "choice") return;
       const sceneId = ui.step.scene.id;
-      haptic("medium");
+      haptic(timedOut ? "warning" : "medium");
       const action = isActionChoice(option.text);
       await sleep(180);
       setUi({ kind: "running" });
@@ -584,6 +587,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
             <Icon name="more" size={26} strokeWidth={3} />
           </button>
         </div>
+        {props.storyMeta?.meters && <MeterBar meters={props.storyMeta.meters} flags={hudFlags} />}
         {threaded && threadsSeen.length > 1 && (
           <ThreadTabs
             threads={threadsSeen}
@@ -639,7 +643,17 @@ export function ChatPlayer(props: ChatPlayerProps) {
           </div>
         ) : (
           <>
-            {ui.kind === "choice" && <ChoicePanel key={ui.step.scene.id} prompt={ui.step.prompt} options={ui.step.options} onSelect={onChoice} />}
+            {ui.kind === "choice" && (
+              <ChoicePanel
+                key={ui.step.scene.id}
+                prompt={ui.step.prompt}
+                options={ui.step.options}
+                onSelect={onChoice}
+                timerMs={timers && !preview ? ui.step.timerMs : null}
+                defaultId={ui.step.defaultId}
+                onTick={() => haptic("rigid")}
+              />
+            )}
             {ui.kind === "input" && <InputPanel key={ui.step.scene.id} prompt={ui.step.prompt} placeholder={ui.step.placeholder} onSubmit={onInput} />}
             {ui.kind === "pause" && <PausePanel until={ui.until} total={ui.total} label={ui.label} onSkip={endPause} />}
             {(ui.kind === "running" || ui.kind === "typing") && <IdleComposer text={typingHere ? status : "Сообщение"} />}
@@ -648,13 +662,29 @@ export function ChatPlayer(props: ChatPlayerProps) {
         )}
       </div>
 
-      {showSettings && <SettingsSheet speed={speed} onSpeed={setSpeed} onClose={() => setShowSettings(false)} onExit={onExit} />}
+      {showSettings && (
+        <SettingsSheet speed={speed} onSpeed={setSpeed} timers={timers} onTimers={setTimers} onClose={() => setShowSettings(false)} onExit={onExit} />
+      )}
       {showClues && <ClueSheet meta={props.storyMeta} found={clueIds} onClose={() => setShowClues(false)} />}
     </div>
   );
 }
 
-function SettingsSheet({ speed, onSpeed, onClose, onExit }: { speed: Speed; onSpeed: (s: Speed) => void; onClose: () => void; onExit: () => void }) {
+function SettingsSheet({
+  speed,
+  onSpeed,
+  timers,
+  onTimers,
+  onClose,
+  onExit,
+}: {
+  speed: Speed;
+  onSpeed: (s: Speed) => void;
+  timers: boolean;
+  onTimers: (v: boolean) => void;
+  onClose: () => void;
+  onExit: () => void;
+}) {
   const opts: Array<{ id: Speed; title: string; hint: string }> = [
     { id: "normal", title: "Как в жизни", hint: "Реалистичный набор текста" },
     { id: "fast", title: "Быстро", hint: "Вдвое быстрее" },
@@ -682,6 +712,18 @@ function SettingsSheet({ speed, onSpeed, onClose, onExit }: { speed: Speed; onSp
             </button>
           ))}
         </div>
+        <button
+          onClick={() => onTimers(!timers)}
+          className="mt-3 flex w-full items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3 text-left ring-1 ring-white/[0.06]"
+        >
+          <span>
+            <span className="block text-[15px] font-medium text-fg">Выборы на время</span>
+            <span className="block text-[13px] text-faint">{timers ? "Включены — в напряжённых сценах надо успеть ответить" : "Выключены — можно думать сколько угодно"}</span>
+          </span>
+          <span className={`relative h-7 w-12 shrink-0 rounded-full transition ${timers ? "bg-accent" : "bg-white/15"}`}>
+            <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${timers ? "left-6" : "left-1"}`} />
+          </span>
+        </button>
         <div className="mt-4 grid grid-cols-2 gap-2 pb-2">
           <button className="btn-secondary" onClick={onExit}>
             Выйти из чата

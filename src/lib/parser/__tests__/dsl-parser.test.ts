@@ -202,3 +202,12 @@ describe("DSL parser — чаты, архив, род", () => {
     expect(r.scenes.map(s => !!s.meta.past)).toEqual([true, true, false]);
   });
 });
+
+describe("DSL parser — выбор на время", () => {
+  it("[timer] и [default]", () => {
+    const r = parseScript("CHOICE: Беги! [timer 8s]\n- Влево -> a\n- (Замереть) [default] -> a\n- Вправо -> a\n:: a\nNPC: x");
+    expect(r.errors).toEqual([]);
+    expect(r.scenes[0].meta).toMatchObject({ prompt: "Беги!", timer_ms: 8000, default_choice: 1 });
+    expect(r.choices[1].label).toBe("(Замереть)");
+  });
+});
