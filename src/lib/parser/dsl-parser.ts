@@ -43,7 +43,7 @@
  *   INPUT: Вопрос -> goto tag [set x=1]   (формат v1)
  */
 
-import type { Character, Flags, SceneMeta, SceneType, Speaker } from "@/lib/types/database";
+import type { Character, ChatConfig, Flags, SceneMeta, SceneType, Speaker } from "@/lib/types/database";
 import { checkCondition, checkOp } from "@/lib/engine/expressions";
 
 export interface ParsedScene {
@@ -73,6 +73,7 @@ export interface ParsedDayMeta {
   teaser?: string;
   push?: string;
   characters: Record<string, Character>;
+  chats: Record<string, ChatConfig>;
 }
 
 export interface ParseResult {
@@ -97,6 +98,8 @@ export interface ParseWarning {
 export interface ParseOptions {
   /** Персонажи истории (объявленные на уровне истории) */
   characters?: Record<string, Character>;
+  /** Чаты истории */
+  chats?: Record<string, ChatConfig>;
 }
 
 const RE = {
@@ -107,6 +110,9 @@ const RE = {
   delay: /^\[delay\s+(\d+(?:\.\d+)?)\s*(ms|s)?\]$/i,
   typingMeta: /^\[typing\s+(\d+(?:\.\d+)?)\s*(ms|s)?\]$/i,
   background: /^\[bg\s+([\w-]+)\]$/i,
+  chat: /^\[chat\s+([\p{L}\p{N}_]+)\]$/iu,
+  historyOpen: /^\[history\]$/i,
+  historyClose: /^\[\/history\]$/i,
   label: /^(?:::\s*([\p{L}\p{N}_]+)|==\s*([\p{L}\p{N}_]+)\s*==)$/u,
   jump: /^(?:->|GOTO\s+)\s*(?:goto\s+)?([\p{L}\p{N}_]+)$/iu,
   end: /^END(?:\s+([\p{L}\p{N}_]+))?$/iu,
@@ -158,6 +164,27 @@ function parseCharacter(rest: string): { id: string; character: Character } | nu
     else if (key === "bio") character.bio = value;
   }
   return { id: m[1], character };
+}
+
+function parseChat(rest: string): { id: string; chat: ChatConfig } | null {
+  const parts = rest.split("|").map(s => s.trim());
+  const head = parts.shift();
+  if (!head) return null;
+  const m = head.match(/^([\p{L}\p{N}_]+)\s+(.+)$/u);
+  if (!m) return null;
+  const chat: ChatConfig = { name: m[2].trim() };
+  for (const p of parts) {
+    const [k, ...v] = p.split("=");
+    const value = v.join("=").trim();
+    const key = k.trim().toLowerCase();
+    if (key === "kind") chat.kind = value === "group" ? "group" : "dm";
+    else if (key === "character") chat.character = value;
+    else if (key === "members") chat.members = value.split(/[,\s]+/).filter(Boolean);
+    else if (key === "color") chat.color = value;
+    else if (key === "initials") chat.initials = value;
+    else if (key === "status") chat.status = value;
+  }
+  return { id: m[1], chat };
 }
 
 /** Разбор "[set a=1, b+=2]" → { a: 1, b: "+=2" } */
@@ -251,7 +278,10 @@ export function parseScript(script: string, options: ParseOptions = {}): ParseRe
   const choices: ParsedChoice[] = [];
   const errors: ParseError[] = [];
   const warnings: ParseWarning[] = [];
-  const dayMeta: ParsedDayMeta = { characters: {} };
+  const dayMeta: ParsedDayMeta = { characters: {}, chats: {} };
+  const knownChats = new Set<string>(Object.keys(options.chats || {}));
+  let currentThread: string | null = null;
+  let inHistory = false;
 
   const characters = new Map<string, string>(); // lower → id
   for (const id of Object.keys(options.characters || {})) characters.set(id.toLowerCase(), id);
@@ -275,6 +305,8 @@ export function parseScript(script: string, options: ParseOptions = {}): ParseRe
       tag = pendingTags[pendingTags.length - 1].tag;
       pendingTags = [];
     }
+    if (currentThread) scene.meta = { ...scene.meta, thread: currentThread };
+    if (inHistory && (scene.type === "message" || scene.type === "system")) scene.meta = { ...scene.meta, past: true };
     scenes.push({ ...scene, tag, line });
     return scenes.length - 1;
   };
@@ -452,6 +484,15 @@ export function parseScript(script: string, options: ParseOptions = {}): ParseRe
           case "bg":
             dayMeta.backgroundStyle = value.trim().toLowerCase();
             break;
+          case "chat": {
+            const c = parseChat(value);
+            if (!c) err(lineNumber, "Формат: @chat id Название | kind=group | character=id | members=a,b", line);
+            else {
+              dayMeta.chats[c.id] = c.chat;
+              knownChats.add(c.id);
+            }
+            break;
+          }
           case "char": {
             const c = parseCharacter(value);
             if (!c) err(lineNumber, "Формат: @char id Имя | color=#hex", line);
@@ -467,6 +508,19 @@ export function parseScript(script: string, options: ParseOptions = {}): ParseRe
         continue;
       }
 
+      if ((m = line.match(RE.chat))) {
+        if (!knownChats.has(m[1])) err(lineNumber, `Неизвестный чат «${m[1]}». Объявите его: @chat ${m[1]} Название`, line);
+        currentThread = m[1];
+        continue;
+      }
+      if (RE.historyOpen.test(line)) {
+        inHistory = true;
+        continue;
+      }
+      if (RE.historyClose.test(line)) {
+        inHistory = false;
+        continue;
+      }
       if ((m = line.match(RE.background))) {
         dayMeta.backgroundStyle = m[1].toLowerCase();
         continue;

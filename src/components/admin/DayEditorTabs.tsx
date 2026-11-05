@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Day, Scene, Choice, Character } from "@/lib/types/database";
+import type { Day, Scene, Choice, Character, ChatConfig } from "@/lib/types/database";
 import { DayPreview } from "./DayPreview";
 import { SceneTimeline } from "./SceneTimeline";
 import { ScriptImporter } from "./ScriptImporter";
@@ -14,12 +14,13 @@ interface DayEditorTabsProps {
   scenes: Scene[];
   choices: Choice[];
   storyCharacters?: Record<string, Character>;
+  storyChats?: Record<string, ChatConfig>;
   mainCharacter?: string;
 }
 
 type Tab = "timeline" | "import" | "preview" | "validate" | "publish" | "settings";
 
-export function DayEditorTabs({ day, scenes, choices, storyCharacters, mainCharacter }: DayEditorTabsProps) {
+export function DayEditorTabs({ day, scenes, choices, storyCharacters, storyChats, mainCharacter }: DayEditorTabsProps) {
   const [activeTab, setActiveTab] = useState<Tab>("import");
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
@@ -57,7 +58,7 @@ export function DayEditorTabs({ day, scenes, choices, storyCharacters, mainChara
           <SceneTimeline day={day} scenes={scenes} choices={choices} />
         )}
         {activeTab === "import" && (
-          <ScriptImporter day={day} existingScenesCount={scenes.length} storyCharacters={storyCharacters} />
+          <ScriptImporter day={day} existingScenesCount={scenes.length} storyCharacters={storyCharacters} storyChats={storyChats} />
         )}
         {activeTab === "preview" && <DayPreview day={day} mainCharacter={mainCharacter} />}
         {activeTab === "validate" && (

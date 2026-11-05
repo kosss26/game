@@ -119,7 +119,7 @@ export function resolve(rt: Runtime, pointer: string | null, flagsIn: Flags): Re
       case "system": {
         const text = interpolate(scene.text || "", flags);
         const typingMs =
-          scene.type === "system" || scene.speaker === "me"
+          scene.type === "system" || scene.speaker === "me" || meta.past
             ? 0
             : meta.typing_delay ?? typingTimeFor(text);
         return {

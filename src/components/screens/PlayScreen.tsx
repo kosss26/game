@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadDay, replayDay, type DayPayload } from "@/lib/actions/player";
 import { useApp, useBackButton } from "@/lib/telegram/TelegramProvider";
-import type { Flags, HistoryEntry } from "@/lib/types/database";
+import type { ChatConfig, Flags, HistoryEntry } from "@/lib/types/database";
 import { ChatPlayer } from "@/components/chat/ChatPlayer";
-import { MessageList, DayDivider } from "@/components/chat/Messages";
+import { MessageList, DayDivider, previewText } from "@/components/chat/Messages";
+import { ThreadTabs } from "@/components/chat/ChatChrome";
 import { FullscreenLoader, ErrorState } from "@/components/ui/States";
 import { Icon } from "@/components/ui/Icon";
 import { DayComplete } from "./DayComplete";
@@ -72,6 +73,7 @@ export function PlayScreen({ storyId, dayNumber }: { storyId: string; dayNumber:
         teaser={p.day.teaser}
         snapshot={p.snapshot}
         history={result.history}
+        flags={result.flags}
         ending={result.ending}
         isLastDay={p.isLastDay}
         onPlay={n => router.push(`/play/${storyId}/${n}`)}
@@ -88,6 +90,7 @@ export function PlayScreen({ storyId, dayNumber }: { storyId: string; dayNumber:
         title={`День ${p.day.number} · ${p.day.title}`}
         characters={p.characters}
         mainCharacter={p.story.meta.main_character}
+        chats={{ ...(p.story.meta.chats || {}), ...(p.snapshot.day.meta?.chats || {}) }}
         onBack={() => setMode("complete")}
         onReplay={
           p.isLastDay || !p.nextDay
@@ -112,6 +115,7 @@ export function PlayScreen({ storyId, dayNumber }: { storyId: string; dayNumber:
       snapshot={p.snapshot}
       characters={p.characters}
       mainCharacter={p.story.meta.main_character}
+      storyMeta={p.story.meta}
       inheritedFlags={p.inheritedFlags}
       initial={
         p.progress
@@ -138,6 +142,7 @@ function Reread({
   title,
   characters,
   mainCharacter,
+  chats,
   onBack,
   onReplay,
 }: {
@@ -145,13 +150,21 @@ function Reread({
   title: string;
   characters: OkPayload["characters"];
   mainCharacter?: string;
+  chats: Record<string, ChatConfig>;
   onBack: () => void;
   onReplay?: () => void;
 }) {
   const native = useBackButton(onBack);
-  const visible = history.filter(h => !h.hidden);
+  const threads = [...new Set(history.filter(h => !h.hidden).map(h => h.thread || "main"))];
+  const [view, setView] = useState(threads[0] || "main");
+  const threaded = Object.keys(chats).length > 0 && threads.length > 0;
+  const getChat = (id: string): ChatConfig => chats[id] || { name: characters[mainCharacter || ""]?.name || "Собеседник", kind: "dm", character: mainCharacter };
+  const visible = history.filter(h => !h.hidden && (!threaded || (h.thread || "main") === view));
   const ids = new Set(visible.filter(h => h.speaker === "npc").map(h => h.character || mainCharacter || "npc"));
-  const def = mainCharacter || [...ids][0] || "npc";
+  const chat = threaded ? getChat(view) : null;
+  const def = chat && chat.kind !== "group" ? chat.character || mainCharacter || "npc" : mainCharacter || [...ids][0] || "npc";
+  const last: Record<string, string> = {};
+  for (const h of history) if (!h.hidden) last[h.thread || "main"] = previewText(h.text);
   return (
     <div className="chat-bg flex h-[100dvh] flex-col">
       <header className="glass border-b border-white/[0.06] pt-safe">
@@ -168,10 +181,23 @@ function Reread({
             </button>
           )}
         </div>
+        {threaded && threads.length > 1 && (
+          <ThreadTabs
+            threads={threads}
+            view={view}
+            active={view}
+            unread={{}}
+            typingThread={null}
+            getChat={getChat}
+            characters={{ npc: { name: "Собеседник" }, ...characters }}
+            last={last}
+            onOpen={setView}
+          />
+        )}
       </header>
       <div className="no-scrollbar flex-1 overflow-y-auto px-3 pb-safe">
         <DayDivider label="Переписка сохранена" />
-        <MessageList entries={visible} characters={{ npc: { name: "Собеседник" }, ...characters }} multiParty={ids.size > 1} defaultCharacter={def} animateFrom={Infinity} />
+        <MessageList entries={visible} characters={{ npc: { name: "Собеседник" }, ...characters }} multiParty={chat ? chat.kind === "group" : ids.size > 1} defaultCharacter={def} animateFrom={Infinity} />
         <div className="h-6" />
       </div>
     </div>

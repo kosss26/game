@@ -183,8 +183,69 @@ function Mystery() {
   );
 }
 
+function Winter() {
+  const r = rng(91);
+  return (
+    <>
+      <defs>
+        <linearGradient id="wsky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#0c1118" />
+          <stop offset="0.6" stopColor="#1f2c3c" />
+          <stop offset="1" stopColor="#3a4a5c" />
+        </linearGradient>
+        <linearGradient id="wice" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#8d9fb3" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#d9e3ee" stopOpacity="0.9" />
+        </linearGradient>
+        <radialGradient id="wwin" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#ffd48a" stopOpacity="0.95" />
+          <stop offset="1" stopColor="#ffd48a" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="wlamp" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#bfe3ff" stopOpacity="0.5" />
+          <stop offset="1" stopColor="#bfe3ff" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <rect width="400" height="320" fill="url(#wsky)" />
+      {/* дальний берег */}
+      <path d={forestRow(41, 172, 22, 44, 14)} fill="#2a3746" />
+      {/* дом на холме */}
+      <g>
+        <path d="M58 150 L120 112 L182 150 Z" fill="#141b25" />
+        <rect x="70" y="148" width="100" height="44" fill="#18212d" />
+        <rect x="112" y="122" width="16" height="12" fill="#ffd48a" opacity="0.9" />
+        <circle cx="120" cy="128" r="22" fill="url(#wwin)" />
+        <rect x="84" y="160" width="12" height="14" fill="#2b3644" />
+        <rect x="144" y="160" width="12" height="14" fill="#2b3644" />
+        <path d="M58 150 L120 112 L182 150" fill="none" stroke="#dfe8f2" strokeWidth="3" opacity="0.85" />
+      </g>
+      {/* лёд */}
+      <path d="M0 205 Q200 190 400 205 V320 H0 Z" fill="url(#wice)" />
+      {/* лодочный сарай и мостки */}
+      <g>
+        <rect x="258" y="176" width="70" height="36" fill="#111821" />
+        <path d="M250 178 L293 156 L336 178 Z" fill="#0d131b" />
+        <path d="M250 178 L293 156 L336 178" fill="none" stroke="#e6eef6" strokeWidth="2.5" opacity="0.9" />
+        <rect x="286" y="190" width="14" height="22" fill="#05080c" />
+        <rect x="322" y="206" width="60" height="4" fill="#0f151d" />
+        <circle cx="292" cy="200" r="30" fill="url(#wlamp)" />
+      </g>
+      {/* тропинка следов */}
+      {Array.from({ length: 9 }, (_, i) => (
+        <ellipse key={i} cx={160 + i * 12 + (i % 2) * 4} cy={196 + i * 1.6} rx="2.2" ry="1.2" fill="#55657a" opacity="0.7" />
+      ))}
+      <path d={forestRow(63, 320, 70, 130, 30)} fill="#070a0f" />
+      {/* снег */}
+      {Array.from({ length: 130 }, (_, i) => (
+        <circle key={i} cx={r() * 400} cy={r() * 320} r={0.6 + r() * 1.6} fill="white" opacity={0.35 + r() * 0.5} />
+      ))}
+    </>
+  );
+}
+
 const STYLES: Record<string, () => React.JSX.Element> = {
   forest: Forest,
+  winter: Winter,
   noir: Noir,
   romance: Romance,
   thriller: Thriller,

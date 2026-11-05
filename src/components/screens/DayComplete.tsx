@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getChoiceStats, getStoryView, type StoryView } from "@/lib/actions/player";
 import { useApp } from "@/lib/telegram/TelegramProvider";
-import type { HistoryEntry, SnapshotData, StoryMeta } from "@/lib/types/database";
+import type { Flags, HistoryEntry, SnapshotData, StoryMeta } from "@/lib/types/database";
+import { foundClues } from "@/components/chat/ChatPlayer";
 import { isActionChoice, stripAction } from "@/lib/engine/runtime";
 import { Icon } from "@/components/ui/Icon";
 import { Countdown } from "@/components/ui/Countdown";
@@ -21,6 +22,7 @@ interface Props {
   teaser: string | null;
   snapshot: SnapshotData;
   history: HistoryEntry[];
+  flags?: Flags;
   ending: string | null;
   isLastDay: boolean;
   onPlay: (dayNumber: number) => void;
@@ -120,6 +122,23 @@ export function DayComplete(p: Props) {
                 <p className="mt-1 text-[14px] text-muted">Мы пришлём сообщение в Telegram, как только новый день откроется.</p>
               </div>
             )}
+          </section>
+        )}
+
+        {/* Улики */}
+        {p.storyMeta.clues && Object.keys(p.storyMeta.clues).length > 0 && p.flags && (
+          <section className="mt-6 card p-5">
+            <h2 className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-faint">
+              <Icon name="search" size={16} /> Улики · {foundClues(p.flags, p.storyMeta).length}/{Object.keys(p.storyMeta.clues).length}
+            </h2>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {foundClues(p.flags, p.storyMeta).map(id => (
+                <span key={id} className="chip bg-warn/15 px-3 py-1.5 text-[12.5px] text-fg/90">
+                  {p.storyMeta.clues![id].title}
+                </span>
+              ))}
+            </div>
+            {!p.isLastDay && <p className="mt-3 text-[13px] text-muted">Улики переходят в следующие дни. Иногда важнее то, о чём промолчали.</p>}
           </section>
         )}
 

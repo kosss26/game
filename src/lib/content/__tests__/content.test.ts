@@ -10,8 +10,8 @@ import type { Flags, SnapshotData } from "@/lib/types/database";
 
 const stories = loadContent();
 
-function toSnapshot(script: string, characters: Record<string, { name: string }>): SnapshotData {
-  const parsed = parseDayScript(script, characters);
+function toSnapshot(script: string, characters: Record<string, { name: string }>, chats: Record<string, { name: string }> = {}): SnapshotData {
+  const parsed = parseDayScript(script, characters, chats);
   if (parsed.errors.length) throw new Error(parsed.errors.map(e => `${e.line}: ${e.message}`).join("\n"));
   const db = convertToDbFormat(parsed);
   return {
@@ -28,7 +28,7 @@ function rand(seed: number) {
 
 describe.each(stories.map(s => [s.slug, s] as const))("контент: %s", (_slug, story) => {
   const characters = story.meta.characters || {};
-  const snapshots = story.days.map(d => ({ n: d.number, snap: toSnapshot(d.script, characters) }));
+  const snapshots = story.days.map(d => ({ n: d.number, snap: toSnapshot(d.script, characters, story.meta.chats || {}) }));
 
   it("дни идут подряд с 1", () => {
     expect(story.days.map(d => d.number)).toEqual(story.days.map((_, i) => i + 1));
@@ -37,9 +37,25 @@ describe.each(stories.map(s => [s.slug, s] as const))("контент: %s", (_sl
   it("все тексты без незакрытых подстановок, кроме флагов игрока", () => {
     for (const { snap } of snapshots) {
       for (const s of snap.scenes) {
-        for (const m of (s.text || "").matchAll(/\{([^}]+)\}/g)) expect(["name"]).toContain(m[1]);
+        for (const m of (s.text || "").matchAll(/\{([^}|]+)\}/g)) expect(["name"]).toContain(m[1]);
       }
     }
+  });
+
+  it("в личных чатах пишет только их собеседник", () => {
+    const problems: string[] = [];
+    for (const d of story.days) {
+      const r = parseDayScript(d.script, characters, story.meta.chats || {});
+      const chats = { ...(story.meta.chats || {}), ...r.dayMeta.chats };
+      if (Object.keys(chats).length === 0) continue;
+      for (const sc of r.scenes) {
+        if (sc.type !== "message" || sc.speaker !== "npc" || !sc.meta.thread) continue;
+        const c = chats[sc.meta.thread];
+        if (!c || c.kind === "group") continue;
+        if (c.character !== sc.meta.character && !(c.also || []).includes(sc.meta.character || "")) problems.push(`${d.file}:${sc.line} ${sc.meta.character} пишет в чат «${c.name}»`);
+      }
+    }
+    expect(problems).toEqual([]);
   });
 
   it("случайные прохождения завершаются, все концовки достижимы", () => {

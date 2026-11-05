@@ -204,3 +204,18 @@ NPC: Тсс.
     expect(isActionChoice("Привет (как дела)")).toBe(false);
   });
 });
+
+describe("род игрока и архив", () => {
+  it("{м|ж} выбирает форму по флагу gender", () => {
+    expect(interpolate("ты {спал|спала}, {брат|сестра}", { gender: "f" })).toBe("ты спала, сестра");
+    expect(interpolate("ты {спал|спала}", {})).toBe("ты спал");
+    expect(interpolate("{name}, ты {пришёл|пришла}", { name: "Аня", gender: "f" })).toBe("Аня, ты пришла");
+  });
+  it("архивные сообщения без набора", () => {
+    const r = play("[history]\nNPC: давно\n[/history]\nNPC: сейчас", []);
+    expect(r.out).toEqual(["давно", "сейчас"]);
+    const rt = buildRuntime(snapshotFrom("[history]\nNPC: давно\n[/history]"));
+    const step = resolve(rt, rt.firstSceneId, {}).step;
+    expect(step.kind === "message" && step.typingMs).toBe(0);
+  });
+});

@@ -29,6 +29,27 @@ export interface Character {
   bio?: string;
 }
 
+/** Чат (тред) внутри истории: групповой или личный */
+export interface ChatConfig {
+  name: string;
+  kind?: "group" | "dm";
+  /** Для личного чата — id персонажа */
+  character?: string;
+  /** Для группы — участники (id персонажей) */
+  members?: string[];
+  /** Для личного чата — кто ещё может писать с этого «номера» (раскрытая личность) */
+  also?: string[];
+  color?: string;
+  initials?: string;
+  status?: string;
+}
+
+/** Улика для блокнота: найдена, если флаг clue_<id> истинен */
+export interface Clue {
+  title: string;
+  text: string;
+}
+
 export interface Ending {
   title: string;
   description?: string;
@@ -49,6 +70,10 @@ export interface StoryMeta {
   endings?: Record<string, Ending>;
   /** Флаг, в котором хранится id концовки */
   ending_flag?: string;
+  /** Чаты истории (если не заданы — один чат с main_character) */
+  chats?: Record<string, ChatConfig>;
+  /** Улики для блокнота */
+  clues?: Record<string, Clue>;
 }
 
 export interface Story {
@@ -77,6 +102,8 @@ export interface DayMeta {
   script?: string;
   /** Персонажи, объявленные в скрипте дня */
   characters?: Record<string, Character>;
+  /** Чаты, объявленные в скрипте дня (переопределяют чаты истории) */
+  chats?: Record<string, ChatConfig>;
 }
 
 export interface Day {
@@ -115,6 +142,10 @@ export interface SceneMeta {
   prompt?: string;
   /** id концовки (для end) */
   ending?: string;
+  /** Чат, в котором показывается сцена */
+  thread?: string;
+  /** Архивное сообщение (старая переписка): без набора и без времени */
+  past?: boolean;
 }
 
 export interface Scene {
@@ -153,6 +184,10 @@ export interface HistoryEntry {
   at: number;
   /** Не отображается в чате (выбор-действие, служебная отметка) */
   hidden?: boolean;
+  /** Чат (тред) */
+  thread?: string;
+  /** Архивное сообщение */
+  past?: boolean;
 }
 
 export interface ProgressState {
