@@ -165,3 +165,30 @@ node scripts/cloudflare-relay.test.mjs
 Тест использует подменённый fetch: оба старых маршрута, новые маршруты,
 несовпадающие секреты, неизвестный/дублированный ID и отсутствие новых настроек.
 Реальный Worker меняется только при Deploy в вашей Cloudflare-панели.
+
+### Автоматическая публикация из SSH
+
+Если создан временный Cloudflare API Token с `Account → Workers Scripts → Edit`
+для нужного аккаунта, ручной перенос bindings не требуется:
+
+```bash
+git -C /opt/polnoch-stories pull --ff-only && python3 /opt/polnoch-stories/scripts/deploy-cloudflare-relay.py
+```
+
+Скрипт запросит ссылку из адресной строки Cloudflare (или Account ID), затем токен
+скрытым вводом. Токен не сохраняется в файл, аргументы процесса или историю shell.
+Текущий Worker и настройки сохраняются в приватный каталог
+`/var/lib/polnoch-stories/cloudflare-before-*`. Старые bindings наследуются через
+`type: inherit` с `bindings_inherit=strict`; существующие Stories secrets также
+наследуются при повторном запуске. Меняется только `battleship-relay`.
+
+После публикации проверяются сохранение старых bindings и `getMe` отдельного бота.
+При неудаче выполняется попытка восстановления прежнего кода и bindings; при
+неудаче восстановления скрипт сообщает об этом и сохраняет копию для ручного
+восстановления. Успешная публикация запускает `relay-apply` в фоне с логом
+`/var/lib/polnoch-stories/relay.log`. После завершения удалите временный API Token
+в Cloudflare. Проверки без обращения в Cloudflare:
+
+```bash
+python3 scripts/test-cloudflare-deploy.py
+```
