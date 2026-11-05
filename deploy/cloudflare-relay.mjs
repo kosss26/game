@@ -17,13 +17,14 @@ export default {
       const origin = new URL(incoming.origin);
       if (origin.protocol !== 'https:' || origin.username || origin.password) return new Response('invalid origin', { status: 503 });
       const r = await fetch(origin.toString(), {
-        method: 'POST', redirect: 'error',
+        method: 'POST', redirect: 'manual',
         body: await req.arrayBuffer(),
         headers: {
           'Content-Type': req.headers.get('Content-Type') || 'application/json',
           'X-Telegram-Bot-Api-Secret-Token': incoming.secret,
         },
       });
+      if (r.status >= 300 && r.status < 400) return new Response('upstream redirect rejected', { status: 502 });
       return new Response(await r.text(), { status: r.status });
     }
     const oldBot = env.BOT_ID && p.startsWith('/bot' + env.BOT_ID + ':');
@@ -38,9 +39,10 @@ export default {
       }
       const hasBody = !['GET', 'HEAD'].includes(req.method);
       const r = await fetch('https://api.telegram.org' + p + url.search, {
-        method: req.method, headers: h, redirect: 'error',
+        method: req.method, headers: h, redirect: 'manual',
         body: hasBody ? await req.arrayBuffer() : undefined,
       });
+      if (r.status >= 300 && r.status < 400) return new Response('upstream redirect rejected', { status: 502 });
       const oh = new Headers();
       const ct = r.headers.get('content-type');
       if (ct) oh.set('content-type', ct);

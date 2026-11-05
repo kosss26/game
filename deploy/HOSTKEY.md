@@ -196,3 +196,17 @@ python3 scripts/test-cloudflare-deploy.py
 Проверка `getMe` в установщике выполняется через `curl`: на этом VPS Python urllib
 получает HTTP 403 даже на корневом адресе Worker. URL с токеном и заголовок
 секрета передаются curl через stdin, без временных файлов и без секретов в argv.
+
+### Проверка в движке Cloudflare Workers
+
+Worker использует `redirect: manual` и возвращает 502 на upstream 3xx. Режим
+`redirect: error` не поддерживается workerd и приводит к HTTP 500.
+
+```bash
+npm install --prefix /tmp/polnoch-workerd-qa --no-audit --no-fund miniflare@4
+MINIFLARE_MODULE=/tmp/polnoch-workerd-qa/node_modules/miniflare node scripts/cloudflare-relay.runtime-test.cjs
+```
+
+Тест запускает реальный workerd с локальным тестовым upstream без обращений в
+Telegram: оба бота, оба webhook, несовпадающие секреты и отсутствие переходов
+по перенаправлениям. Miniflare нужен только для проверки разработчиком.
