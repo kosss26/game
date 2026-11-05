@@ -27,13 +27,14 @@ with tempfile.TemporaryDirectory(prefix='polnoch-hostkey-') as tmp:
     calls = tmp / 'calls.json'
     preload.write_text('''import fs from 'node:fs';
 const calls=[];
+const R=o=>({status:200,json:async()=>o,text:async()=>JSON.stringify(o)});
 globalThis.fetch=async function(url) {
  const method=String(url).split('/').at(-1); calls.push(method); fs.writeFileSync(process.env.QA_CALLS, JSON.stringify(calls));
  const mode=process.env.QA_CASE;
- if (method==='getMe') return {json:async()=>({ok:true,result:{username:mode==='wrong_bot'?'other_bot':'stories_qa_bot'}})};
- if (method==='getWebhookInfo') return {json:async()=>({ok:true,result:{url:mode==='foreign_webhook'?'https://other.invalid/api/webhook':''}})};
- if (method==='setWebhook' && mode==='api_error') return {json:async()=>({ok:false,description:'fixture rejection'})};
- return {json:async()=>({ok:true,result:true})};
+ if (method==='getMe') return R({ok:true,result:{username:mode==='wrong_bot'?'other_bot':'stories_qa_bot'}});
+ if (method==='getWebhookInfo') return R({ok:true,result:{url:mode==='foreign_webhook'?'https://other.invalid/api/webhook':''}});
+ if (method==='setWebhook' && mode==='api_error') return R({ok:false,description:'fixture rejection'});
+ return R({ok:true,result:true});
 };
 ''')
     for case in ['wrong_bot','foreign_webhook','api_error','success']:
