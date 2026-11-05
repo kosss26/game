@@ -16,7 +16,7 @@ MODE=${1:-status}
 die() { printf '\nОШИБКА: %s\n' "$*" >&2; exit 1; }
 say() { printf '\n== %s\n' "$*"; }
 [[ $EUID == 0 ]] || die 'Запустите от root'
-case "$MODE" in init|install|update|bot|status|renew) ;; *) die 'Режимы: init | install | update | bot | status | renew' ;; esac
+case "$MODE" in init|install|update|bot|status|renew|relay-config|relay-apply) ;; *) die 'Режимы: init | install | update | bot | status | renew | relay-config | relay-apply' ;; esac
 for cmd in docker git python3 curl openssl flock ss; do command -v "$cmd" >/dev/null || die "Не найдена команда $cmd"; done
 [[ ! -L "$STATE" && ! -L /etc/polnoch-stories && ! -L "$ACME" ]] || die 'Каталоги установки не должны быть символическими ссылками'
 mkdir -p "$STATE" /etc/polnoch-stories
@@ -236,7 +236,46 @@ update_app() {
   curl -fsS --max-time 20 "https://$(get_env DOMAIN)/api/health" || true
   printf '\nОбновлено до %s\n' "$(git -C "$ROOT" log --oneline -1)"
 }
+relay_config() {
+  ready
+  python3 - "$ENV" "$STATE" <<'PYRELAY'
+import pathlib, secrets, sys, os
+path, state = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+original = path.read_text()
+values = dict(line.split('=', 1) for line in original.splitlines() if '=' in line and not line.startswith('#'))
+bot_id = values['TELEGRAM_BOT_TOKEN'].split(':', 1)[0]
+assert bot_id.isdigit(), 'Invalid bot ID'
+relay_secret = values.get('STORIES_RELAY_SECRET') or secrets.token_hex(24)
+base = 'https://battleship-relay.kosyakov.workers.dev'
+values.update(TELEGRAM_API_URL=base, TELEGRAM_API_BASE=base, TELEGRAM_RELAY_SECRET=relay_secret, STORIES_RELAY_SECRET=relay_secret, TELEGRAM_WEBHOOK_URL=base+'/stories/webhook')
+backup = state / 'app.env.before-relay'
+if not backup.exists(): backup.write_text(original); backup.chmod(0o600)
+next_file = path.with_suffix('.relay.tmp')
+next_file.write_text(''.join(f'{key}={value}\n' for key, value in values.items()))
+next_file.chmod(0o600); os.replace(next_file, path)
+settings = state / 'cloudflare-stories.txt'
+settings.write_text(f"Variables (Text):\nSTORIES_BOT_ID={bot_id}\nSTORIES_ORIGIN_WEBHOOK={values['APP_URL'].rstrip('/')}/api/telegram/webhook\n\nSecrets:\nSTORIES_RELAY_SECRET={relay_secret}\nSTORIES_WEBHOOK_SECRET={values['TELEGRAM_WEBHOOK_SECRET']}\n")
+settings.chmod(0o600)
+print('Настройки Cloudflare сохранены в /var/lib/polnoch-stories/cloudflare-stories.txt (600).')
+print('Токен бота не передаётся в Cloudflare Variables и не выводится.')
+print('Сначала обновите Worker и добавьте четыре новые настройки, затем выполните relay-apply.')
+PYRELAY
+}
+relay_apply() {
+  ready
+  [[ -n $(get_env TELEGRAM_API_BASE) && -n $(get_env TELEGRAM_RELAY_SECRET) && -n $(get_env TELEGRAM_WEBHOOK_URL) ]] || die 'Сначала выполните relay-config'
+  [[ -z $(git -C "$ROOT" status --porcelain) ]] || die 'В исходниках есть локальные изменения'
+  compose config --quiet
+  say 'Собираю приложение и инструменты с поддержкой реле'
+  compose build app tools
+  compose up -d --no-build --no-deps app
+  wait_health
+  compose run --rm --no-deps tools npm run bot:setup
+  printf '\nГотово: исходящие запросы и webhook нового бота используют реле.\n'
+}
 case "$MODE" in
+  relay-config) relay_config ;;
+  relay-apply) relay_apply ;;
   init) init ;;
   install) install_app ;;
   update) update_app ;;

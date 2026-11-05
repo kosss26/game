@@ -1,3 +1,5 @@
+import { telegramRequest } from "../src/lib/telegram/transport";
+
 /**
  * Настройка бота: webhook, команды, кнопка меню Mini App, описание.
  *   npm run bot:setup
@@ -7,18 +9,14 @@
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const appUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
 const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL || `${appUrl}/api/telegram/webhook`;
 const apiUrl = (process.env.TELEGRAM_API_URL || process.env.TELEGRAM_API_BASE || "https://api.telegram.org").replace(/\/+$/, "");
 const relaySecret = process.env.TELEGRAM_RELAY_SECRET || "";
 
 async function call(method: string, params: Record<string, unknown> = {}) {
   let res: Response;
   try {
-    res = await fetch(`${apiUrl}/bot${token}/${method}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(relaySecret ? { "X-Relay-Secret": relaySecret } : {}) },
-      body: JSON.stringify(params),
-      signal: AbortSignal.timeout(20000),
-    });
+    res = await telegramRequest(method, params, { token: token || "", apiBase: apiUrl, relaySecret });
   } catch (error) {
     const cause = (error as { cause?: { code?: string; message?: string } }).cause;
     throw new Error(
@@ -49,6 +47,10 @@ async function main() {
     process.exit(1);
   }
 
+  const target = new URL(webhookUrl);
+  if (target.protocol !== "https:" || target.username || target.password || target.search || target.hash) {
+    throw new Error("TELEGRAM_WEBHOOK_URL должен быть HTTPS-адресом без пароля и параметров");
+  }
   const expected = (process.env.BOT_USERNAME || "").replace(/^@/, "");
   if (!expected) throw new Error("Задайте BOT_USERNAME: проверка отдельного бота обязательна");
   const me = await call("getMe");
@@ -56,11 +58,11 @@ async function main() {
     throw new Error(`Ожидался @${expected}, токен принадлежит @${me.result?.username || "unknown"}`);
   }
   const webhook = await call("getWebhookInfo");
-  if (webhook.result?.url && webhook.result.url !== `${appUrl}/api/telegram/webhook`) {
+  if (webhook.result?.url && webhook.result.url !== webhookUrl && webhook.result.url !== `${appUrl}/api/telegram/webhook`) {
     throw new Error("У бота уже настроен другой webhook. Его настройки не изменены.");
   }
   await call("setWebhook", {
-    url: `${appUrl}/api/telegram/webhook`,
+    url: webhookUrl,
     secret_token: secret,
     allowed_updates: ["message", "pre_checkout_query", "my_chat_member"],
     drop_pending_updates: false,

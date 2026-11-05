@@ -108,3 +108,60 @@ npm run build
 настройки бота с подменённым `fetch`, без запросов в Telegram: другой бот,
 чужой webhook, ошибка API и успешный сценарий. Публичный TLS и реальный токен
 окончательно проверяются на сервере при `install` и `bot`.
+
+## Добавление «Полночи» в существующий Cloudflare Worker
+
+`deploy/cloudflare-relay.mjs` содержит полный код для двух ботов. Он сохраняет
+старые имена `BOT_ID`, `RELAY_SECRET`, `WEBHOOK_SECRET`, `ORIGIN_WEBHOOK` и путь
+`/webhook` для Battleship. Их значения не меняются. Новое приложение использует
+отдельные имена `STORIES_*` и путь `/stories/webhook`.
+
+Обновите только checkout нового приложения:
+
+```bash
+git -C /opt/polnoch-stories pull --ff-only
+bash /opt/polnoch-stories/deploy/hostkey.sh relay-config
+```
+
+Команда сохраняет резервную копию исходного env и генерирует отдельный секрет
+реле. Повторный запуск не меняет его и не затрагивает пароль БД. Настройки для
+Cloudflare записываются в `/var/lib/polnoch-stories/cloudflare-stories.txt` (600).
+Этот файл содержит два секрета: копируйте значения в свою панель, не публикуйте
+файл или его скриншот. Полный токен бота в него не включается.
+
+В том же `battleship-relay` добавьте **новые** bindings:
+
+| Имя | Тип |
+|---|---|
+| `STORIES_BOT_ID` | Variable / Text |
+| `STORIES_ORIGIN_WEBHOOK` | Variable / Text |
+| `STORIES_RELAY_SECRET` | Secret |
+| `STORIES_WEBHOOK_SECRET` | Secret |
+
+Замените код Worker содержимым `deploy/cloudflare-relay.mjs` и нажмите Deploy.
+Не удаляйте и не переименовывайте старые bindings Battleship. Пока новые bindings
+не заданы, новый маршрут запрещён, а старый продолжает использовать свои ключи.
+
+После обновления Worker:
+
+```bash
+nohup bash /opt/polnoch-stories/deploy/hostkey.sh relay-apply >/var/lib/polnoch-stories/relay.log 2>&1 </dev/null &
+```
+
+```bash
+tail -n 40 /var/lib/polnoch-stories/relay.log
+```
+
+Пересобираются app/tools; пересоздаётся **только приложение «Полночь»**. База,
+backup, cron, nginx и Battleship не пересоздаются. Скрипт проверяет здоровье и
+запускает настройку отдельного бота через реле. И CLI, и серверные уведомления,
+инвойсы Stars и ответы Telegram используют один транспорт с таймаутом и отдельным
+`X-Relay-Secret`. При прямом режиме этот секрет в Telegram не отправляется.
+
+```bash
+node scripts/cloudflare-relay.test.mjs
+```
+
+Тест использует подменённый fetch: оба старых маршрута, новые маршруты,
+несовпадающие секреты, неизвестный/дублированный ID и отсутствие новых настроек.
+Реальный Worker меняется только при Deploy в вашей Cloudflare-панели.
