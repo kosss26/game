@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """No network requests: validate binding preservation, backup and rollback."""
 import copy
+import io
+import urllib.error
 import importlib.util
 import json
 import pathlib
@@ -54,6 +56,21 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn('формат', error)
         self.assertNotIn('private_fixture', error)
         self.assertNotIn('private_fixture', str(d.api_error(400, b'private_fixture')))
+
+    def test_bot_username_mismatch_is_reported_without_token(self):
+        payload = json.dumps({'ok': True, 'result': {'username': 'actual_bot'}}).encode()
+        with patch.object(d.urllib.request, 'urlopen', return_value=io.BytesIO(payload)):
+            with self.assertRaises(d.DeploymentError) as caught: d.verify_bot(VALUES)
+        self.assertIn('@actual_bot', str(caught.exception))
+        self.assertIn('@stories_bot', str(caught.exception))
+        self.assertNotIn(VALUES['TELEGRAM_BOT_TOKEN'], str(caught.exception))
+
+    def test_bot_http_error_is_reported_without_response_body(self):
+        error = urllib.error.HTTPError('https://relay.invalid', 403, 'Forbidden', {}, io.BytesIO(b'private'))
+        with patch.object(d.urllib.request, 'urlopen', side_effect=error), patch.object(d.time, 'sleep'):
+            with self.assertRaises(d.DeploymentError) as caught: d.verify_bot(VALUES)
+        self.assertIn('HTTP 403', str(caught.exception))
+        self.assertNotIn('private', str(caught.exception))
 
     def test_multipart_backup_parser(self):
         source = b'export default {fetch(){}};'
