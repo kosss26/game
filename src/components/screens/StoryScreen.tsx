@@ -12,281 +12,116 @@ import { Icon } from "@/components/ui/Icon";
 import { Countdown } from "@/components/ui/Countdown";
 import { ErrorState, FullscreenLoader } from "@/components/ui/States";
 import { useUnlock } from "./useUnlock";
-import { chaptersLabel } from "@/lib/utils/plural";
+import { chaptersLabel, plural } from "@/lib/utils/plural";
 
 export function StoryScreen({ storyId }: { storyId: string }) {
   const router = useRouter();
-  const { ready, token, confirm, share, haptic } = useApp();
+  const { ready, token, confirm, share, haptic, authError, retryAuth } = useApp();
   const [view, setView] = useState<StoryView | null | undefined>(undefined);
   const [failed, setFailed] = useState(false);
-
+  const [restartBusy, setRestartBusy] = useState(false);
+  const [restartError, setRestartError] = useState(false);
   const load = useCallback(() => {
     setFailed(false);
-    getStoryView(token, storyId)
-      .then(setView)
-      .catch(() => setFailed(true));
+    getStoryView(token, storyId).then(setView).catch(() => setFailed(true));
   }, [token, storyId]);
-
-  useEffect(() => {
-    if (ready) load();
-  }, [ready, load]);
-
+  useEffect(() => { if (ready) load(); }, [ready, load]);
   const native = useBackButton(() => router.push("/"));
   const unlock = useUnlock(storyId, load);
 
+  if (authError) return <ErrorState title="Не удалось войти" action={retryAuth} />;
   if (!ready || (view === undefined && !failed)) return <FullscreenLoader />;
   if (failed) return <ErrorState title="Нет соединения" action={load} />;
   if (!view) return <ErrorState icon="book" title="История не найдена" href="/" actionLabel="На главную" />;
 
   const { story, days } = view;
   const meta = story.meta;
-  const current = days.find(d => d.status === "in_progress") || days.find(d => d.status === "available");
-  const waiting = days.find(d => d.status === "waiting" || d.status === "not_released");
-  const completed = days.filter(d => d.status === "completed").length;
+  const current = days.find(day => day.status === "in_progress") || days.find(day => day.status === "available");
+  const waiting = days.find(day => day.status === "waiting" || day.status === "not_released");
+  const completed = days.filter(day => day.status === "completed").length;
   const finished = days.length > 0 && completed === days.length && view.upcomingDays === 0;
-  const totalMinutes = days.reduce((a, d) => a + (d.minutes || 12), 0);
-  const characters = Object.entries(meta.characters || {}).filter(([, c]) => c.bio);
+  const characters = Object.entries(meta.characters || {}).filter(([, character]) => character.bio);
   const endings = Object.entries(meta.endings || {});
-
+  const preview = meta.preview_message;
+  const speaker = preview && meta.characters?.[preview.character];
+  const genre = meta.genre?.split(" · ").pop();
+  const synopsis = meta.synopsis || story.description?.split(/\n\s*\n/)[0];
+  const onShare = () => { if (view.shareLink) { haptic("select"); share(view.shareLink, meta.share_text || `«${story.title}» — ${meta.tagline || "интерактивная история"}`); } };
   const onRestart = async () => {
     if (!(await confirm("Начать историю заново? Прогресс будет сброшен, открытые концовки сохранятся."))) return;
-    haptic("warning");
-    await restartStory(token, storyId);
-    load();
+    haptic("warning"); setRestartBusy(true); setRestartError(false);
+    try { const result = await restartStory(token, storyId); if (!result.ok) throw new Error("restart failed"); load(); } catch { setRestartError(true); } finally { setRestartBusy(false); }
   };
 
-  return (
-    <main className="min-h-[100dvh] bg-ink pb-[calc(110px+env(safe-area-inset-bottom))]">
-      {/* Обложка */}
-      <div className="grain relative h-[52vh] min-h-[340px] overflow-hidden">
-        <CoverArt style={story.cover_style} className="absolute inset-0 h-full w-full" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-ink" />
-        {!native && (
-          <Link href="/" className="absolute left-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur pt-safe" aria-label="Назад">
-            <Icon name="back" size={22} />
-          </Link>
-        )}
+  return <main className="library-shell story-detail">
+    <div className="story-hero">
+      <CoverArt style={story.cover_style} className="story-hero-art" priority />
+      <div className="story-hero-shade" />
+      <header className="story-toolbar">
+        {!native ? <Link href="/" className="story-round-button" aria-label="Назад к историям"><Icon name="back" size={25} /></Link> : <span />}
+        <span>История</span>
+        {view.shareLink ? <button type="button" className="story-round-button" aria-label="Поделиться историей" onClick={onShare}><Icon name="forward" size={24} /></button> : <span />}
+      </header>
+      {meta.age_rating && <span className="story-age">{meta.age_rating}</span>}
+      <div className="story-hero-copy">
+        {genre && <span className="story-genre">{genre}</span>}
+        <h1 className={story.title.length > 12 ? "story-long-title" : ""}>{story.title}</h1>
+        {meta.tagline && <p>{meta.tagline}</p>}
       </div>
-
-      <div className="relative -mt-28 px-5">
-        <div className="flex flex-wrap gap-1.5">
-          {meta.genre && <span className="chip bg-white/10 text-fg/85">{meta.genre}</span>}
-          <span className="chip bg-white/10 text-fg/85">{chaptersLabel(days.length + view.upcomingDays)}</span>
-          <span className="chip bg-white/10 text-fg/85">~{totalMinutes} мин</span>
-          {meta.age_rating && <span className="chip bg-white/10 text-fg/85">{meta.age_rating}</span>}
-        </div>
-        <h1 className="mt-3 font-display text-[34px] font-bold leading-[1.08] tracking-tight text-fg">{story.title}</h1>
-        {meta.tagline && <p className="mt-2 text-[16px] leading-snug text-fg/80">{meta.tagline}</p>}
-        {story.description && <p className="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-muted">{story.description}</p>}
+    </div>
+    <div className="story-detail-content">
+      <div className="story-facts" aria-label="Об истории">
+        <span><Icon name="book" size={19} />{chaptersLabel(days.length + view.upcomingDays)}</span>
+        {endings.length > 0 && <span><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="12" cy="5" r="3" /><circle cx="4" cy="19" r="3" /><circle cx="20" cy="19" r="3" /><path d="m10.5 7.5-5 9m8-9 5 9M7 19h10" /></svg>{endings.length} {plural(endings.length, "концовка", "концовки", "концовок")}</span>}
+        <span><Icon name="chat" size={21} />История в чате</span>
       </div>
-
-      {/* Персонажи */}
-      {characters.length > 0 && (
-        <section className="mt-8">
-          <h2 className="mb-3 px-5 text-[13px] font-semibold uppercase tracking-[0.1em] text-faint">Персонажи</h2>
-          <div className="no-scrollbar flex gap-3 overflow-x-auto px-5 pb-1">
-            {characters.map(([id, c]) => (
-              <div key={id} className="card w-[210px] shrink-0 p-4">
-                <div className="flex items-center gap-3">
-                  <Avatar id={id} character={c} size={44} />
-                  <p className="text-[16px] font-semibold text-fg">{c.name}</p>
-                </div>
-                <p className="mt-3 text-[13.5px] leading-snug text-muted">{c.bio}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Главы */}
-      <section className="mt-8 px-4">
-        <h2 className="mb-3 px-1 text-[13px] font-semibold uppercase tracking-[0.1em] text-faint">
-          Главы · {completed}/{days.length + view.upcomingDays}
-        </h2>
-        <ol className="space-y-2">
-          {days.map(d => (
-            <DayRow key={d.dayId} day={d} storyId={storyId} view={view} unlock={unlock} onReady={load} />
-          ))}
-          {Array.from({ length: view.upcomingDays }, (_, i) => (
-            <li key={`up${i}`} className="flex items-center gap-3 rounded-3xl border border-dashed border-white/10 px-4 py-3.5">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.04] text-faint">
-                <Icon name="sparkle" size={18} />
-              </span>
-              <span className="text-[14.5px] text-faint">Глава {days.length + i + 1} · скоро</span>
-            </li>
-          ))}
+      {preview && <aside className="story-preview library-panel" aria-label="Сообщение из истории">
+        <p className="story-preview-sender"><span style={{ backgroundColor: speaker?.color || "#b08af7" }} />{speaker?.name || "Неизвестный номер"}</p>
+        <p className="story-preview-text">{preview.text}</p>
+        {preview.time && <span className="story-preview-time">{preview.time}</span>}
+      </aside>}
+      {(synopsis || story.description) && <section className="story-about" aria-labelledby="story-about-heading">
+        <h2 id="story-about-heading">Об истории</h2>
+        {synopsis && <p className="story-synopsis">{synopsis}</p>}
+        {story.description && <details className="story-description"><summary><span className="story-read-more">Читать полностью</span><span className="story-read-less">Свернуть описание</span><Icon name="chevron" size={19} /></summary><p>{story.description}</p></details>}
+      </section>}
+      <section className="story-chapters" aria-labelledby="story-chapters-heading">
+        <div className="story-section-heading"><h2 id="story-chapters-heading">Главы</h2><span>{completed} из {days.length + view.upcomingDays} пройдено</span></div>
+        <ol className="story-chapter-list library-panel">
+          {days.map(day => <DayRow key={day.dayId} day={day} storyId={storyId} view={view} unlock={unlock} current={day.dayId === current?.dayId} onReady={load} />)}
+          {Array.from({ length: view.upcomingDays }, (_, index) => <li key={`upcoming-${index}`} className="story-chapter-row is-unavailable"><span className="story-chapter-number">{String(days.length + index + 1).padStart(2, "0")}</span><span className="story-chapter-name">Глава {days.length + index + 1}</span><span className="story-chapter-status">Скоро</span></li>)}
         </ol>
-        {unlock.error && <p className="mt-3 text-center text-[13px] text-danger">{unlock.error}</p>}
+        {days.length === 0 && !view.upcomingDays && <p className="story-help">Главы готовятся к выходу.</p>}
+        {unlock.error && <p role="alert" className="story-error">{unlock.error}</p>}
       </section>
-
-      {/* Сезонный пропуск */}
-      {view.paymentsEnabled && !view.hasPass && !finished && days.length > 1 && (
-        <section className="mx-4 mt-6 overflow-hidden rounded-3xl bg-gradient-to-br from-accent/25 via-accent/10 to-transparent p-5 ring-1 ring-accent/30">
-          <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent/30 text-white">
-              <Icon name="bolt" size={22} />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[16px] font-semibold text-fg">Без ожидания</p>
-              <p className="mt-0.5 text-[13.5px] leading-snug text-muted">Все главы этой истории открываются сразу после предыдущей. Один раз и навсегда.</p>
-            </div>
-          </div>
-          <button className="btn-primary mt-4 w-full" disabled={unlock.busy} onClick={() => unlock.buy("season_pass")}>
-            Открыть за {view.prices.seasonPass} ⭐
-          </button>
-        </section>
-      )}
-      {view.freeAccess && !view.hasPass && days.length > 1 && !finished && (
-        <p className="mx-4 mt-6 flex items-center justify-center gap-2 rounded-2xl bg-accent/10 py-3 text-[14px] text-fg/90">
-          <Icon name="bolt" size={16} className="text-accent" /> Все главы открыты — без ожидания
-        </p>
-      )}
-      {view.hasPass && (
-        <p className="mx-4 mt-6 flex items-center justify-center gap-2 rounded-2xl bg-accent/10 py-3 text-[14px] text-fg/90">
-          <Icon name="bolt" size={16} className="text-accent" /> Сезонный пропуск активен
-        </p>
-      )}
-
-      {/* Концовки */}
-      {endings.length > 0 && (completed > 0 || view.endingsUnlocked.length > 0) && (
-        <section className="mx-4 mt-6 card p-5">
-          <h2 className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-faint">
-            <Icon name="trophy" size={16} /> Концовки · {view.endingsUnlocked.length}/{endings.length}
-          </h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {endings.map(([id, e]) => {
-              const got = view.endingsUnlocked.includes(id);
-              return (
-                <span key={id} className={`chip px-3 py-1.5 text-[12.5px] ${got ? "bg-accent/20 text-fg" : "text-faint"}`}>
-                  <Icon name={got ? "star" : "lock"} size={12} /> {got || !e.secret ? e.title : "???"}
-                </span>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Друзья и сброс */}
-      <section className="mx-4 mt-6 grid grid-cols-2 gap-2">
-        {!view.isGuest && view.shareLink ? (
-          <button className="btn-secondary" onClick={() => share(view.shareLink, meta.share_text || `«${story.title}» — ${meta.tagline || "интерактивная история"}`)}>
-            <Icon name="gift" size={18} /> Пригласить
-          </button>
-        ) : (
-          <span />
-        )}
-        {completed > 0 ? (
-          <button className="btn-ghost" onClick={onRestart}>
-            <Icon name="refresh" size={17} /> Заново
-          </button>
-        ) : (
-          <span />
-        )}
-      </section>
-      {!view.isGuest && !view.freeAccess && (
-        <p className="mx-6 mt-2 text-center text-[12.5px] text-faint">
-          Друг по вашей ссылке = бесплатный пропуск ожидания{view.credits > 0 ? ` · у вас ${view.credits}` : ""}
-        </p>
-      )}
-
-      {/* Нижняя кнопка */}
-      <div className="glass fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.06] px-4 pt-3 pb-safe">
-        <div className="pb-3">
-          {current ? (
-            <Link href={`/play/${storyId}/${current.dayNumber}`} className="btn-primary w-full text-[16px]">
-              <Icon name="play" size={16} />
-              {current.status === "in_progress" ? `Продолжить · Глава ${current.dayNumber}` : completed === 0 ? "Начать историю" : `Продолжить · Глава ${current.dayNumber}`}
-            </Link>
-          ) : waiting?.unlocksAt ? (
-            <div className="btn-secondary w-full cursor-default">
-              <Icon name="clock" size={17} /> Глава {waiting.dayNumber} через&nbsp;
-              <Countdown until={waiting.unlocksAt} compact onDone={load} />
-            </div>
-          ) : finished ? (
-            <Link href={`/play/${storyId}/${days[days.length - 1].dayNumber}`} className="btn-secondary w-full">
-              <Icon name="trophy" size={17} /> История пройдена · итоги
-            </Link>
-          ) : (
-            <div className="btn-secondary w-full cursor-default">Продолжение скоро</div>
-          )}
-        </div>
-      </div>
-    </main>
-  );
+      {view.paymentsEnabled && !view.hasPass && !finished && days.length > 1 && <section className="story-pass library-panel"><h2>Без ожидания</h2><p>Все главы этой истории открываются сразу после предыдущей.</p><button className="story-secondary" disabled={unlock.busy} onClick={() => unlock.buy("season_pass")}>Открыть за {view.prices.seasonPass} ⭐</button></section>}
+      {view.hasPass && <p className="story-help"><Icon name="bolt" size={15} /> Сезонный пропуск активен</p>}
+      {characters.length > 0 && <details className="story-extras"><summary>Персонажи<Icon name="chevron" size={17} /></summary><div className="story-character-list">{characters.map(([id, character]) => <div key={id}><Avatar id={id} character={character} size={36} /><p><strong>{character.name}</strong><span>{character.bio}</span></p></div>)}</div></details>}
+      {endings.length > 0 && (completed > 0 || view.endingsUnlocked.length > 0) && <details className="story-extras"><summary>Коллекция концовок<span>{view.endingsUnlocked.length} из {endings.length}</span><Icon name="chevron" size={17} /></summary><div className="story-ending-list">{endings.map(([id, ending]) => { const found = view.endingsUnlocked.includes(id); return <span key={id} className={found ? "is-found" : ""}><Icon name={found ? "star" : "lock"} size={13} />{found ? ending.title : ending.secret ? "Секретная концовка" : "Неоткрытая концовка"}</span>; })}</div></details>}
+      {completed > 0 && <button className="story-restart" disabled={restartBusy} onClick={onRestart}><Icon name="refresh" size={16} />{restartBusy ? "Сбрасываем прогресс…" : "Начать заново"}</button>}
+      {restartError && <p role="alert" className="story-error">Не удалось сбросить прогресс. Попробуйте ещё раз.</p>}
+      {!view.isGuest && !view.freeAccess && <p className="story-help">Друг по вашей ссылке — бесплатный пропуск ожидания{view.credits > 0 ? ` · у вас ${view.credits}` : ""}</p>}
+    </div>
+    <div className="story-start-bar">
+      {current ? <Link href={`/play/${storyId}/${current.dayNumber}`} className="story-start-button"><Icon name="play" size={19} />{current.status === "in_progress" || completed > 0 ? `Продолжить · Глава ${current.dayNumber}` : "Начать историю"}</Link>
+        : waiting?.unlocksAt ? <div className="story-waiting-button" role="status"><Icon name="clock" size={18} />Глава {waiting.dayNumber} через <Countdown until={waiting.unlocksAt} compact onDone={load} /></div>
+        : finished ? <Link href={`/play/${storyId}/${days[days.length - 1].dayNumber}`} className="story-start-button"><Icon name="trophy" size={18} />История пройдена · итоги</Link>
+        : <div className="story-waiting-button" role="status">Продолжение скоро</div>}
+      <p>{current ? completed === 0 && current.dayNumber === 1 ? "С первой главы · прогресс сохраняется" : "Ваша история продолжается · прогресс сохраняется" : finished ? "Открытые концовки остаются в коллекции" : "Вернитесь, когда откроется следующая глава"}</p>
+    </div>
+  </main>;
 }
 
-function DayRow({
-  day,
-  storyId,
-  view,
-  unlock,
-  onReady,
-}: {
-  day: DayAccess;
-  storyId: string;
-  view: StoryView;
-  unlock: ReturnType<typeof useUnlock>;
-  onReady: () => void;
-}) {
+function DayRow({ day, storyId, view, unlock, current, onReady }: { day: DayAccess; storyId: string; view: StoryView; unlock: ReturnType<typeof useUnlock>; current: boolean; onReady: () => void }) {
   const playable = day.status === "available" || day.status === "in_progress" || day.status === "completed";
-  const badge =
-    day.status === "completed" ? (
-      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-ok/15 text-ok">
-        <Icon name="check" size={18} strokeWidth={2.4} />
-      </span>
-    ) : day.status === "available" || day.status === "in_progress" ? (
-      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-[15px] font-bold text-white shadow-glow">{day.dayNumber}</span>
-    ) : (
-      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.05] text-faint">
-        <Icon name={day.status === "waiting" ? "clock" : "lock"} size={17} />
-      </span>
-    );
-
-  const body = (
-    <div className={`flex items-center gap-3 rounded-3xl px-4 py-3.5 transition ${playable ? "bg-raised/80 ring-1 ring-white/[0.06] active:scale-[0.99]" : "bg-surface/60"}`}>
-      {badge}
-      <div className="min-w-0 flex-1">
-        <p className={`truncate text-[15.5px] font-medium ${playable ? "text-fg" : "text-muted"}`}>
-          <span className="text-faint">Глава {day.dayNumber} · </span>
-          {day.title}
-        </p>
-        <p className="text-[12.5px] text-faint">
-          {day.status === "completed" && "Пройдена · перечитать"}
-          {day.status === "in_progress" && "В процессе"}
-          {day.status === "available" && `~${day.minutes || 12} мин`}
-          {day.status === "locked" && "Откроется после предыдущей главы"}
-          {day.status === "waiting" && day.unlocksAt && (
-            <>
-              Откроется через <Countdown until={day.unlocksAt} compact onDone={onReady} />
-            </>
-          )}
-          {day.status === "not_released" && day.unlocksAt && (
-            <>
-              Выход: {new Date(day.unlocksAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
-            </>
-          )}
-        </p>
-      </div>
-      {playable && <Icon name="chevron" className="text-faint" />}
-    </div>
-  );
-
-  return (
-    <li>
-      {playable ? <Link href={`/play/${storyId}/${day.dayNumber}`}>{body}</Link> : body}
-      {day.status === "waiting" && day.skippable && (view.credits > 0 || view.paymentsEnabled) && (
-        <div className="mt-1.5 flex gap-2 px-1">
-          {view.credits > 0 ? (
-            <button className="btn-secondary min-h-[40px] flex-1 text-[14px]" disabled={unlock.busy} onClick={() => unlock.spendCredit(day.dayNumber)}>
-              <Icon name="gift" size={16} /> Открыть бесплатно
-            </button>
-          ) : (
-            <button className="btn-secondary min-h-[40px] flex-1 text-[14px]" disabled={unlock.busy} onClick={() => unlock.buy("skip_day", day.dayNumber)}>
-              <Icon name="bolt" size={16} /> Открыть сейчас · {view.prices.skipDay} ⭐
-            </button>
-          )}
-        </div>
-      )}
-    </li>
-  );
+  const body = <>
+    <span className="story-chapter-number">{String(day.dayNumber).padStart(2, "0")}</span>
+    <span className="story-chapter-name">Глава {day.dayNumber}<span className="sr-only"> · {day.title}</span>{day.status === "waiting" && day.unlocksAt && <span className="story-chapter-wait">Через <Countdown until={day.unlocksAt} compact onDone={onReady} /></span>}{day.status === "not_released" && <span className="story-chapter-wait">{day.unlocksAt ? `Выход ${new Date(day.unlocksAt).toLocaleDateString("ru-RU")}` : "Скоро"}</span>}</span>
+    {current && <span className="story-chapter-status"><i />{day.status === "in_progress" ? "Продолжить" : "Начать"}</span>}
+    {day.status === "completed" ? <Icon name="check" size={18} className="story-chapter-check" /> : <Icon name="chevron" size={20} />}
+  </>;
+  return <li className={current ? "is-current" : ""}>
+    {playable ? <Link href={`/play/${storyId}/${day.dayNumber}`} className="story-chapter-row" aria-current={current ? "step" : undefined}>{body}</Link> : <div className="story-chapter-row is-unavailable" aria-label={`Глава ${day.dayNumber}: ${day.status === "locked" ? "откроется после предыдущей главы" : "пока недоступна"}`}>{body}</div>}
+    {day.status === "waiting" && day.skippable && (view.credits > 0 || view.paymentsEnabled) && <div className="story-unlock-actions">{view.credits > 0 ? <button className="story-secondary" disabled={unlock.busy} onClick={() => unlock.spendCredit(day.dayNumber)}>Открыть бесплатно</button> : <button className="story-secondary" disabled={unlock.busy} onClick={() => unlock.buy("skip_day", day.dayNumber)}>Открыть сейчас · {view.prices.skipDay} ⭐</button>}</div>}
+  </li>;
 }

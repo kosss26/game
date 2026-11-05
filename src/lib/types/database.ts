@@ -71,6 +71,9 @@ export interface Ending {
 }
 
 export interface StoryMeta {
+  /** Short, spoiler-free introduction for the story detail screen. */
+  synopsis?: string;
+  preview_message?: { character: string; text: string; time?: string };
   tagline?: string;
   /** Текст для кнопки «поделиться» */
   share_text?: string;

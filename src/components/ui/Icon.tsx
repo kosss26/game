@@ -1,6 +1,7 @@
 import type { SVGProps } from "react";
 
 const PATHS = {
+  chat: "M14 15c-1 .7-2.4 1-4 1l-5 3v-4C0 12 1 4 8 3c7-1 12 5 9 10M17 9c7 0 9 9 3 11v3l-4-2c-3 0-5-1-6-3",
   back: "M15 18l-6-6 6-6",
   chevron: "M9 6l6 6-6 6",
   close: "M6 6l12 12M18 6L6 18",
