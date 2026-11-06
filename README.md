@@ -116,7 +116,7 @@ node .next/standalone/server.js      # нужны также .next/static → .n
 
 ### Администраторы
 - В браузере: `/admin/login` и `ADMIN_PASSWORD`.
-- Из Telegram: Telegram ID в `ADMIN_TELEGRAM_IDS` или запись в таблице `admin_users`. На главной появится кнопка «Студия».
+- Из Telegram: Telegram ID в `ADMIN_TELEGRAM_IDS` или запись в таблице `admin_users`. Внизу профиля появится ссылка «Студия».
 
 ## Формат сценария
 

@@ -29,6 +29,10 @@ export const config = {
   appUrl: env("APP_URL").replace(/\/$/, ""),
   webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || "",
   cronSecret: process.env.CRON_SECRET || "",
+  get legalOperatorName() { return env("LEGAL_OPERATOR_NAME"); },
+  get supportEmail() { const value = env("SUPPORT_EMAIL"); return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? value : ""; },
+  get supportUsername() { const value = env("SUPPORT_USERNAME").replace(/^@/, ""); return /^[A-Za-z0-9_]{5,32}$/.test(value) ? value : ""; },
+  get supportTelegramIds() { return (process.env.SUPPORT_TELEGRAM_IDS || process.env.ADMIN_TELEGRAM_IDS || "").split(/[,\s]+/).map(Number).filter(id => Number.isSafeInteger(id) && id > 0); },
   adminPassword: process.env.ADMIN_PASSWORD || "",
   adminTelegramIds: (process.env.ADMIN_TELEGRAM_IDS || "")
     .split(/[,\s]+/)

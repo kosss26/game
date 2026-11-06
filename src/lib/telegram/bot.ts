@@ -46,9 +46,7 @@ export async function createStarsInvoiceLink(p: InvoiceParams): Promise<string> 
   });
 }
 
-export function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+export { escapeHtml } from "./messages";
 
 /** Ссылка на Mini App для шаринга */
 export function miniAppLink(startParam?: string): string {

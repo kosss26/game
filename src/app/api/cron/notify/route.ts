@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { config } from "@/lib/config";
 import { db } from "@/lib/supabase/server";
 import { BotApiError, escapeHtml, sendMessage, webAppButton } from "@/lib/telegram/bot";
-import type { Day, Story, StoryMeta } from "@/lib/types/database";
+import type { Day, Story } from "@/lib/types/database";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -69,16 +69,13 @@ export async function GET(req: Request) {
     const { data: user } = await supabase.from("users").select("telegram_id, first_name, is_guest, bot_blocked").eq("id", row.user_id).maybeSingle();
 
     if (!started && user && !user.is_guest && !user.bot_blocked && Number(user.telegram_id) > 0) {
-      const meta = (story.meta || {}) as StoryMeta;
-      const main = meta.main_character ? meta.characters?.[meta.main_character]?.name : null;
+
       const custom = next.meta?.push;
       const text = custom
-        ? `💬 ${escapeHtml(custom)}\n\n<i>${escapeHtml(story.title)} · Глава ${next.day_number}</i>`
-        : main
-        ? `💬 <b>${escapeHtml(main)}</b>: «Ты здесь? Мне нужно тебе кое-что рассказать…»\n\n<i>${escapeHtml(story.title)} · Глава ${next.day_number}</i>`
-        : `🌙 Открылась новая глава истории <b>${escapeHtml(story.title)}</b>: «${escapeHtml(next.title)}»`;
+        ? `<b>${escapeHtml(story.title)}</b> · Глава ${next.day_number}\n\n${escapeHtml(custom)}`
+        : `<b>${escapeHtml(story.title)}</b>\n\nДоступна глава ${next.day_number}: «${escapeHtml(next.title)}». Можно продолжить историю.`;
       try {
-        await sendMessage(Number(user.telegram_id), text, { reply_markup: webAppButton("Ответить", `/play/${story.id}/${next.day_number}`) });
+        await sendMessage(Number(user.telegram_id), text, { reply_markup: webAppButton("Продолжить историю", `/play/${story.id}/${next.day_number}`) });
         sent++;
       } catch (e) {
         if (e instanceof BotApiError && e.code === 403) {

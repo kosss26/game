@@ -608,7 +608,7 @@ export async function createInvoice(
     }
     const link = await createStarsInvoiceLink({
       title: "Сезонный пропуск",
-      description: `Все дни истории «${story.title}» без ожидания`,
+      description: `Главы истории «${story.title}» без ожидания после прохождения предыдущей`,
       payload: encodePayload({ product: "season_pass", storyId: input.storyId, dayNumber: null, userId: user.id }),
       stars: config.prices.seasonPass,
     });

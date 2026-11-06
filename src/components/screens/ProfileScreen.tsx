@@ -8,7 +8,7 @@ import { useApp, useBackButton, type Speed } from "@/lib/telegram/TelegramProvid
 import { CoverArt } from "@/components/ui/CoverArt";
 import { Icon } from "@/components/ui/Icon";
 import { ErrorState, FullscreenLoader } from "@/components/ui/States";
-import { LibraryAvatar, LibraryHeader, LibraryNav } from "@/components/ui/LibraryChrome";
+import { LibraryAvatar, LibraryNav } from "@/components/ui/LibraryChrome";
 import { plural } from "@/lib/utils/plural";
 
 const SPEEDS: Array<{ id: Speed; title: string; hint: string }> = [
@@ -33,9 +33,9 @@ export function ProfileScreen() {
   }, [ready, token]);
   useBackButton(() => router.push("/"));
 
-  if (authError) return <main className="library-shell"><LibraryHeader profile /><ErrorState title="Не удалось войти" action={retryAuth} /><LibraryNav active="profile" /></main>;
+  if (authError) return <main className="library-shell"><ErrorState title="Не удалось войти" action={retryAuth} /><LibraryNav active="profile" /></main>;
   if (!ready || (!view && !failed)) return <FullscreenLoader />;
-  if (failed || !view) return <main className="library-shell"><LibraryHeader profile /><ErrorState title="Нет соединения" action={load} /><LibraryNav active="profile" /></main>;
+  if (failed || !view) return <main className="library-shell"><ErrorState title="Нет соединения" action={load} /><LibraryNav active="profile" /></main>;
 
   const name = view.name || (!view.isGuest ? session?.user.first_name : null) || "Гость";
   const stories = [...view.stories].sort((a, b) => Number(b.completedDays > 0 || b.status === "in_progress") - Number(a.completedDays > 0 || a.status === "in_progress"));
@@ -46,7 +46,6 @@ export function ProfileScreen() {
 
   return (
     <main className="library-shell library-profile">
-      <LibraryHeader profile admin={session?.isAdmin} />
       <div className="library-content">
         <div className="library-profile-identity"><LibraryAvatar large name={name} photo={view.photo} /><div><h1>{name}</h1><p>У каждой истории — твой финал</p></div></div>
         <div className="library-stats" aria-label="Ваша статистика"><Stat value={view.stats.started} label="Начато" /><Stat value={view.stats.finished} label="Пройдено" /><Stat value={view.stats.endings} label="Концовки" /></div>
@@ -70,7 +69,7 @@ export function ProfileScreen() {
           {!view.freeAccess && <p className="library-referral-copy">За друга — {view.referralBonus} {plural(view.referralBonus, "пропуск ожидания", "пропуска ожидания", "пропусков ожидания")}. Доступно: {view.credits}.</p>}
           {view.invited > 0 && <p className="library-referral-copy">С вами уже {view.invited} {plural(view.invited, "друг", "друга", "друзей")}</p>}
         </section>}
-        <footer className="library-legal"><Link href="/legal">Условия и конфиденциальность</Link></footer>
+        <footer className="library-legal"><Link href="/legal">Условия и конфиденциальность</Link>{session?.isAdmin && <Link href="/admin" className="library-admin-link">Студия</Link>}</footer>
       </div>
       <LibraryNav active="profile" />
     </main>

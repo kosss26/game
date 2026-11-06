@@ -7,7 +7,7 @@ import { useApp } from "@/lib/telegram/TelegramProvider";
 import { CoverArt } from "@/components/ui/CoverArt";
 import { Icon } from "@/components/ui/Icon";
 import { ErrorState } from "@/components/ui/States";
-import { LibraryHeader, LibraryNav } from "@/components/ui/LibraryChrome";
+import { LibraryNav } from "@/components/ui/LibraryChrome";
 import { Countdown } from "@/components/ui/Countdown";
 import { chaptersLabel } from "@/lib/utils/plural";
 
@@ -47,7 +47,6 @@ export function HomeScreen() {
 
   return (
     <main className="library-shell library-home">
-      <LibraryHeader name={user?.first_name} photo={user?.photo_url} admin={session?.isAdmin} />
       <div className="library-content">
         <div className="library-greeting">
           <h1>{greeting()}{user ? `, ${user.first_name}` : ""}</h1>

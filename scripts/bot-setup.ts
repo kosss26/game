@@ -1,3 +1,4 @@
+import { BOT_COMMANDS, BOT_SHORT_DESCRIPTION, BOT_DESCRIPTION } from "../src/lib/telegram/messages";
 import { telegramRequest } from "../src/lib/telegram/transport";
 
 /**
@@ -67,27 +68,10 @@ async function main() {
     allowed_updates: ["message", "pre_checkout_query", "my_chat_member"],
     drop_pending_updates: false,
   });
-  await call("setMyCommands", {
-    commands: [
-      { command: "start", description: "Открыть истории" },
-      { command: "paysupport", description: "Поддержка по оплатам" },
-      { command: "terms", description: "Условия использования" },
-    ],
-  });
-  await call("setChatMenuButton", { menu_button: { type: "web_app", text: "Истории", web_app: { url: appUrl } } });
-  await call("setMyShortDescription", {
-    short_description: "Интерактивные истории в переписке: триллер, мистика, ограбление, петля времени. Ваши ответы решают, чем всё кончится.",
-  });
-  await call("setMyDescription", {
-    description:
-      "🌙 Полночь — истории, которые происходят в чате.\n\n" +
-      "Вам пишут персонажи. Вы отвечаете. Каждый выбор меняет сюжет, а у каждой истории несколько концовок.\n\n" +
-      "• «04:44» — одна ночь повторяется, и помните её только вы и она\n" +
-      "• «Тихий час» — в 03:12 пишет незнакомка, и до утра нужно дожить вместе\n" +
-      "• «Белый шум» — детектив: метель, шестеро друзей и пропавшая сестра\n" +
-      "• «Северное сияние» — ограбление музея в прямом эфире\n\n" +
-      "Нажмите «Старт», чтобы начать.",
-  });
+  await call("setMyCommands", { commands: BOT_COMMANDS });
+  await call("setChatMenuButton", { menu_button: { type: "web_app", text: "Открыть истории", web_app: { url: appUrl } } });
+  await call("setMyShortDescription", { short_description: BOT_SHORT_DESCRIPTION });
+  await call("setMyDescription", { description: BOT_DESCRIPTION });
   console.log(`\nГотово. Mini App: ${appUrl}`);
 }
 

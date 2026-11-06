@@ -5,6 +5,10 @@ import { db } from "@/lib/supabase/server";
 import { callBot, escapeHtml, sendMessage, webAppButton } from "@/lib/telegram/bot";
 import { decodePayload, grantPurchase } from "@/lib/game/purchases";
 
+import { welcomeMessage, HELP_MESSAGE } from "@/lib/telegram/messages";
+import { promptSupport, deliverSupport, answerSupport, supportReplyKind, type SupportReply } from "@/lib/telegram/support";
+import { plural } from "@/lib/utils/plural";
+
 export const dynamic = "force-dynamic";
 
 interface TgUser {
@@ -20,6 +24,7 @@ interface Update {
     chat: { id: number; type: string };
     from?: TgUser;
     text?: string;
+    reply_to_message?: SupportReply;
     successful_payment?: {
       currency: string;
       total_amount: number;
@@ -65,28 +70,11 @@ async function ensureUser(from: TgUser, refParam?: string) {
     if (referrer && Number(referrer.telegram_id) > 0) {
       await sendMessage(
         referrer.telegram_id,
-        `🎁 По вашему приглашению пришёл <b>${escapeHtml(from.first_name)}</b>. Вам начислен бесплатный пропуск ожидания.`
+        config.freeAccess ? `По вашему приглашению присоединился <b>${escapeHtml(from.first_name)}</b>. Теперь можно сравнить ваши финалы.` : `По вашему приглашению присоединился <b>${escapeHtml(from.first_name)}</b>. Начислено: ${config.referralBonus} ${plural(config.referralBonus, "пропуск ожидания", "пропуска ожидания", "пропусков ожидания")}.`
       ).catch(() => undefined);
     }
   }
 }
-
-const WELCOME = (name: string, stories: { title: string; tagline?: string; genre?: string }[]) => {
-  const list = stories
-    .map(st => `<b>${escapeHtml(st.title)}</b>${st.genre ? ` · <i>${escapeHtml(st.genre)}</i>` : ""}${st.tagline ? `\n${escapeHtml(st.tagline)}` : ""}`)
-    .join("\n\n");
-  return (
-    `Привет, <b>${escapeHtml(name)}</b> 🌙\n\n` +
-    `Это <b>Полночь</b> — истории, которые происходят прямо в переписке. ` +
-    `Вам пишут живые персонажи, вы отвечаете, и от каждого ответа зависит, чем всё закончится.\n\n` +
-    `▫️ несколько чатов одновременно, улики и тайны\n` +
-    `▫️ решения на время — думать некогда\n` +
-    `▫️ несколько концовок, одна из них секретная\n` +
-    `▫️ новые главы — бот напомнит, когда откроются\n` +
-    (list ? `\n<b>Сейчас в приложении:</b>\n\n${list}\n\n` : "\n") +
-    `Выберите историю или откройте весь список 👇`
-  );
-};
 
 async function publishedStories() {
   try {
@@ -110,29 +98,34 @@ async function handleCommand(chatId: number, from: TgUser | undefined, text: str
 
   if (command === "/start") {
     if (from) await ensureUser(from, args[0]);
+    if (args[0] === "support" || args[0] === "paysupport") { await promptSupport(chatId, args[0] === "paysupport"); return; }
     const stories = await publishedStories();
     const appUrl = config.appUrl;
     const keyboard = [
       ...stories.map(st => [{ text: `▶️ ${st.title}`, web_app: { url: `${appUrl}/story/${st.id}` } }]),
       [{ text: "🌙 Все истории", web_app: { url: `${appUrl}/` } }],
     ];
-    await sendMessage(chatId, WELCOME(from?.first_name || "друг", stories), { reply_markup: { inline_keyboard: keyboard } });
+    await sendMessage(chatId, welcomeMessage(from?.first_name || "друг", stories.length > 0), { reply_markup: { inline_keyboard: keyboard } });
     return;
   }
-  if (command === "/paysupport") {
-    await sendMessage(
-      chatId,
-      "Поддержка по оплатам: опишите проблему ответным сообщением и приложите дату покупки. " +
-        "Если покупка не применилась — откройте приложение заново: доступ выдаётся автоматически. " +
-        "Возврат Stars возможен в течение 14 дней, если открытый контент не был прочитан."
-    );
+  if (command === "/support" || command === "/paysupport") {
+    if (args.join(" ").trim()) await deliverSupport(chatId, from, args.join(" "), command === "/paysupport");
+    else await promptSupport(chatId, command === "/paysupport");
+    return;
+  }
+  if (command === "/help") {
+    await sendMessage(chatId, HELP_MESSAGE, { reply_markup: { inline_keyboard: [
+      [{ text: "Открыть истории", web_app: { url: config.appUrl } }],
+      [{ text: "Настройки чтения", web_app: { url: `${config.appUrl}/profile` } }],
+      [{ text: "Условия и конфиденциальность", web_app: { url: `${config.appUrl}/legal` } }],
+    ] } });
     return;
   }
   if (command === "/terms") {
-    await sendMessage(chatId, "Условия использования и политика конфиденциальности:", { reply_markup: webAppButton("Открыть", "/legal") });
+    await sendMessage(chatId, "Здесь описаны правила приложения, обработка данных и вопросы оплаты:", { reply_markup: webAppButton("Условия и конфиденциальность", "/legal") });
     return;
   }
-  await sendMessage(chatId, "Истории живут в приложении 👇", { reply_markup: webAppButton("🌙 Открыть") });
+  await sendMessage(chatId, "Чтобы выбрать историю или продолжить чтение, откройте приложение.\n\nНужна помощь? /support\nКак играть: /help", { reply_markup: webAppButton("Открыть истории") });
 }
 
 export async function POST(req: Request) {
@@ -168,8 +161,8 @@ export async function POST(req: Request) {
         await sendMessage(
           update.message!.chat.id,
           payload.product === "season_pass"
-            ? "✨ Сезонный пропуск активирован. Все дни истории открываются без ожидания."
-            : `✨ Глава ${payload.dayNumber} открыта. Возвращайтесь в историю!`,
+            ? "Сезонный пропуск активирован. Новые главы этой истории будут открываться после предыдущих без ожидания."
+            : `Глава ${payload.dayNumber} открыта. Можно продолжить историю.`,
           { reply_markup: webAppButton("Продолжить", `/story/${payload.storyId}`) }
         ).catch(() => undefined);
       }
@@ -187,6 +180,11 @@ export async function POST(req: Request) {
     // 4. Команды
     const msg = update.message;
     if (msg?.text && msg.chat.type === "private") {
+      if (!msg.text.startsWith("/")) {
+        if (await answerSupport(msg.chat.id, msg.from, msg.text, msg.reply_to_message)) return NextResponse.json({ ok: true });
+        const kind = supportReplyKind(msg.reply_to_message);
+        if (kind) { await deliverSupport(msg.chat.id, msg.from, msg.text, kind === "payment"); return NextResponse.json({ ok: true }); }
+      }
       await handleCommand(msg.chat.id, msg.from, msg.text);
     }
   } catch (e) {
