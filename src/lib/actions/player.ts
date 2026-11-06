@@ -42,6 +42,8 @@ export interface CatalogItem {
   endingsFound: number;
   /** Самая свежая история, которую игрок ещё не начинал */
   isNew: boolean;
+  /** История бесплатна для всех */
+  isFree: boolean;
   /** Оценка длительности одной главы, мин */
   minutesPerDay: number | null;
 }
@@ -85,6 +87,8 @@ export interface StoryView {
   paymentsEnabled: boolean;
   /** Бесплатный режим: все главы открыты */
   freeAccess: boolean;
+  /** Сама история бесплатна для всех */
+  storyFree: boolean;
   endingsUnlocked: string[];
   shareLink: string;
   isGuest: boolean;
@@ -126,7 +130,8 @@ function hasFreeAccess(user: User | null): boolean {
 
 async function loadAccessContext(user: User | null, storyId: string) {
   const supabase = await db();
-  const [{ data: days }, progressRes, purchaseRes] = await Promise.all([
+  const [{ data: storyRow }, { data: days }, progressRes, purchaseRes] = await Promise.all([
+    supabase.from("stories").select("meta").eq("id", storyId).maybeSingle(),
     supabase.from("days").select("*").eq("story_id", storyId).order("day_number", { ascending: true }),
     user
       ? supabase.from("progresses").select("day_id, completed, completed_at, flags, updated_at").eq("user_id", user.id).eq("story_id", storyId)
@@ -144,16 +149,18 @@ async function loadAccessContext(user: User | null, storyId: string) {
   const progresses = (progressRes.data || []) as Array<Pick<Progress, "day_id" | "completed" | "completed_at" | "flags" | "updated_at">>;
   const purchases = (purchaseRes.data || []) as Array<Pick<Purchase, "product" | "day_number">>;
   const isAdmin = await isUserAdmin(user);
+  const storyFree = !!((storyRow?.meta || {}) as StoryMeta).free;
+  const free = storyFree || hasFreeAccess(user);
   const access = computeAccess({
     days: allDays,
     progresses,
     purchases,
     now: Date.now(),
     isAdmin,
-    freeAccess: hasFreeAccess(user),
+    freeAccess: free,
     defaultWaitHours: config.defaultWaitHours,
   });
-  return { allDays, progresses, purchases, access, isAdmin };
+  return { allDays, progresses, purchases, access, isAdmin, storyFree, free };
 }
 
 function summarize(access: DayAccess[], upcoming: number): Pick<CatalogItem, "completedDays" | "nextDay" | "status" | "unlocksAt"> {
@@ -205,6 +212,7 @@ async function buildCatalog(user: User | null): Promise<CatalogItem[]> {
       endingsTotal: Object.keys(meta.endings || {}).length,
       endingsFound: ((user?.meta?.endings?.[s.id] || []) as string[]).length,
       isNew: false,
+      isFree: !!meta.free,
       minutesPerDay: mins.length ? Math.round(mins.reduce((a, b) => a + b, 0) / mins.length) : null,
     });
   }
@@ -296,8 +304,9 @@ export async function getStoryView(token: string | null, storyId: string): Promi
     credits: user?.skip_credits ?? 0,
     hasPass: hasSeasonPass(ctx.purchases),
     prices: config.prices,
-    paymentsEnabled: !!config.botToken && !user?.is_guest && !hasFreeAccess(user),
-    freeAccess: hasFreeAccess(user),
+    paymentsEnabled: !!config.botToken && !user?.is_guest && !ctx.free,
+    freeAccess: ctx.free,
+    storyFree: ctx.storyFree,
     endingsUnlocked: endings,
     shareLink: miniAppLink(user && !user.is_guest ? `ref_${user.telegram_id}` : undefined),
     isGuest: !!user?.is_guest,
@@ -596,6 +605,8 @@ export async function createInvoice(
   const user = await resolveUser(token);
   if (!user || user.is_guest) return { ok: false, error: "Покупки доступны в Telegram" };
   if (!config.botToken) return { ok: false, error: "Оплата не настроена" };
+  const freeCtx = await loadAccessContext(user, input.storyId);
+  if (freeCtx.free) return { ok: false, error: "Эта история для вас бесплатна" };
   const supabase = await db();
   const { data: story } = await supabase.from("stories").select("title").eq("id", input.storyId).maybeSingle();
   if (!story) return { ok: false, error: "История не найдена" };

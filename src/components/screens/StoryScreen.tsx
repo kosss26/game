@@ -64,7 +64,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
       </header>
       {meta.age_rating && <span className="story-age">{meta.age_rating}</span>}
       <div className="story-hero-copy">
-        {genre && <span className="story-genre">{genre}</span>}
+        <span className="story-hero-tags">{genre && <span className="story-genre">{genre}</span>}{view.storyFree && <span className="library-free">Бесплатно</span>}</span>
         <h1 className={story.title.length > 12 ? "story-long-title" : ""}>{story.title}</h1>
         {meta.tagline && <p>{meta.tagline}</p>}
       </div>
@@ -75,6 +75,10 @@ export function StoryScreen({ storyId }: { storyId: string }) {
         {endings.length > 0 && <span><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="12" cy="5" r="3" /><circle cx="4" cy="19" r="3" /><circle cx="20" cy="19" r="3" /><path d="m10.5 7.5-5 9m8-9 5 9M7 19h10" /></svg>{endings.length} {plural(endings.length, "концовка", "концовки", "концовок")}</span>}
         <span><Icon name="chat" size={21} />История в чате</span>
       </div>
+      {view.storyFree && <section className="story-free library-panel" aria-label="Бесплатная история">
+        <span className="story-free-icon"><Icon name="gift" size={22} /></span>
+        <span><strong>Вся история — бесплатно</strong><span>Все {chaptersLabel(days.length + view.upcomingDays)} открываются сразу, без ожидания и оплаты.</span></span>
+      </section>}
       {preview && <aside className="story-preview library-panel" aria-label="Сообщение из истории">
         <p className="story-preview-sender"><span style={{ backgroundColor: speaker?.color || "#b08af7" }} />{speaker?.name || "Неизвестный номер"}</p>
         <p className="story-preview-text">{preview.text}</p>

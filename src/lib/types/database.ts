@@ -71,6 +71,8 @@ export interface Ending {
 }
 
 export interface StoryMeta {
+  /** История полностью бесплатна: все главы без ожидания и оплаты */
+  free?: boolean;
   /** Short, spoiler-free introduction for the story detail screen. */
   synopsis?: string;
   preview_message?: { character: string; text: string; time?: string };

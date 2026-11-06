@@ -88,7 +88,7 @@ function ResumeCard({ item }: { item: CatalogItem }) {
   return <Link href={href} className="library-resume library-panel" aria-label={`Продолжить ${item.title}. ${chapterStatus(item)}`}>
     <div className="library-resume-cover"><CoverArt style={item.cover_style} thumbnail priority /></div>
     <div className="library-resume-copy">
-      <span className="library-eyebrow">{item.status === "waiting" ? "Продолжение скоро" : "Продолжить"}</span>
+      <span className="library-eyebrow">{item.status === "waiting" ? "Продолжение скоро" : "Продолжить"}{item.isFree && <span className="library-free library-free-sm">Бесплатно</span>}</span>
       <h2>{item.title}</h2><p>{chapterStatus(item)}</p>
       <div className="library-resume-progress" role="progressbar" aria-label="Прочитанные главы" aria-valuenow={item.completedDays} aria-valuemin={0} aria-valuemax={Math.max(1, item.totalDays)}><span style={{ width: `${progress}%` }} /></div>
     </div>
@@ -102,7 +102,7 @@ function FeaturedCard({ item }: { item: CatalogItem }) {
   return <Link href={`/story/${item.id}`} className="library-feature library-panel" aria-label={`${item.title} — ${label}`}>
     <CoverArt style={item.cover_style} priority className="library-feature-art" />
     <div className="library-feature-shade" />
-    <div className="library-feature-badges">{item.isNew && <span className="library-new">Новинка</span>}{item.meta.age_rating && <span className="library-age">{item.meta.age_rating}</span>}</div>
+    <div className="library-feature-badges">{item.isNew && <span className="library-new">Новинка</span>}{item.isFree && <span className="library-free">Бесплатно</span>}{item.meta.age_rating && <span className="library-age">{item.meta.age_rating}</span>}</div>
     <div className="library-feature-copy">
       <h3>{item.title}</h3>
       {item.meta.tagline && <p className="library-feature-tagline">{item.meta.tagline}</p>}
@@ -117,7 +117,7 @@ function StoryRow({ item }: { item: CatalogItem }) {
   const active = item.status !== "new" && item.status !== "coming";
   return <Link href={`/story/${item.id}`} className="library-story-row library-panel">
     <div className="library-row-cover"><CoverArt style={item.cover_style} thumbnail /></div>
-    <div className="library-row-copy"><h3>{item.title}</h3><p>{active ? chapterStatus(item) : item.meta.genre || item.meta.tagline || chaptersLabel(item.totalDays)}</p></div>
+    <div className="library-row-copy"><h3>{item.title}{item.isFree && <span className="library-free library-free-sm">Бесплатно</span>}</h3><p>{active ? chapterStatus(item) : item.meta.genre || item.meta.tagline || chaptersLabel(item.totalDays)}</p></div>
     <Icon name="chevron" size={20} />
   </Link>;
 }

@@ -432,3 +432,13 @@ a {
 .legal-contact-button { display: flex; align-items: center; justify-content: center; min-height: 46px; border: 1px solid #ae82ea77; border-radius: 10px; margin-top: 18px; padding: 10px; background: #9b71dd22; color: #dfcaff; font-size: 14px; }
 .legal-footer { margin-top: 30px; border-top: 1px solid #483e5350; padding-top: 20px; text-align: center; font-size: 11px; color: #9e91ac; }
 @media (min-width: 540px) { .legal-content { padding-left: 28px; padding-right: 28px; } .legal-reader h1 { font-size: 36px; } }
+
+/* Бесплатная история */
+.library-free { display: inline-flex; align-items: center; padding: 4px 11px; border-radius: 18px; color: #06281b; background: linear-gradient(110deg, #6ff0b8, #3fd69a); box-shadow: 0 0 14px #3fd69a55; text-transform: uppercase; font-weight: 600; font-size: 10px; line-height: 1.2; letter-spacing: .7px; font-family: theme("fontFamily.sans"); }
+.library-free-sm { margin-left: 8px; padding: 2px 7px; font-size: 9px; vertical-align: 3px; box-shadow: none; }
+.library-feature-badges .library-free { margin-left: 6px; }
+.story-hero-tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.story-free { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 14px; border-color: #3fd69a55 !important; background: linear-gradient(120deg, #3fd69a1f, transparent 70%), #12141d; }
+.story-free-icon { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 14px; color: #6ff0b8; background: #3fd69a22; }
+.story-free strong { display: block; font-size: 15px; color: #f2f0f6; }
+.story-free span span { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.45; color: #bfb2d0; }
