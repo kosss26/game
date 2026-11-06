@@ -22,7 +22,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="ru">
       <body className="antialiased">
-        <Script src="https://telegram.org/js/telegram-web-app.js?57" strategy="beforeInteractive" />
+        <Script src="/vendor/telegram-web-app.124bdff7.js" strategy="afterInteractive" />
         <TelegramProvider>{children}</TelegramProvider>
       </body>
     </html>

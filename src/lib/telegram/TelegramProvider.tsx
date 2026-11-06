@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { signIn } from "@/lib/actions/auth";
+import { withTimeout } from "@/lib/utils/with-timeout";
 
 // ---------------------------------------------------------------------------
 // Типы Telegram WebApp (используемое подмножество)
@@ -116,15 +117,24 @@ function safeSet(key: string, value: string | null) {
   }
 }
 
-function waitForTelegram(timeoutMs = 1500): Promise<TelegramWebApp | null> {
+function waitForTelegram(signal: AbortSignal, timeoutMs = 8000): Promise<TelegramWebApp | null> {
   return new Promise(resolve => {
     const started = Date.now();
-    const tick = () => {
-      const tg = window.Telegram?.WebApp;
-      if (tg) return resolve(tg);
-      if (Date.now() - started > timeoutMs) return resolve(null);
-      setTimeout(tick, 50);
+    let timer: ReturnType<typeof setTimeout>;
+    const finish = (tg: TelegramWebApp | null) => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
+      resolve(tg);
     };
+    const abort = () => finish(null);
+    const tick = () => {
+      if (signal.aborted) return finish(null);
+      const tg = window.Telegram?.WebApp;
+      if (tg) return finish(tg);
+      if (Date.now() - started >= timeoutMs) return finish(null);
+      timer = setTimeout(tick, 50);
+    };
+    signal.addEventListener("abort", abort, { once: true });
     tick();
   });
 }
@@ -144,7 +154,6 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [authError, setAuthError] = useState(false);
   const [speed, setSpeedState] = useState<Speed>("normal");
   const [timers, setTimersState] = useState(true);
-  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const s = safeGet(SPEED_KEY);
@@ -154,12 +163,24 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    let removeInsetListeners: (() => void) | undefined;
+    setReady(false);
+    setAuthError(false);
     (async () => {
-      const tg = await waitForTelegram();
+      const tg = await waitForTelegram(controller.signal);
+      if (cancelled) return;
+      // A missing SDK must not silently turn a Telegram player into a new guest.
+      if (!tg) {
+        setAuthError(true);
+        setReady(true);
+        return;
+      }
       const inTelegram = !!tg && !!tg.initData;
+      // Release Telegram's native loading screen before any network sign-in.
+      try { tg.ready(); } catch { /* old clients */ }
       if (tg && inTelegram) {
         try {
-          tg.ready();
           tg.expand();
           tg.setHeaderColor?.(BG);
           tg.setBackgroundColor?.(BG);
@@ -169,13 +190,20 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
           const onInsets = () => applyInsets(tg);
           tg.onEvent("safeAreaChanged", onInsets);
           tg.onEvent("contentSafeAreaChanged", onInsets);
+          removeInsetListeners = () => {
+            tg.offEvent("safeAreaChanged", onInsets);
+            tg.offEvent("contentSafeAreaChanged", onInsets);
+          };
         } catch {
           // старые клиенты Telegram
         }
         if (!cancelled) setWebApp(tg);
       }
 
-      const res = await signIn({ initData: inTelegram ? tg!.initData : null, token: safeGet(TOKEN_KEY) }).catch(() => null);
+      const res = await withTimeout(
+        signIn({ initData: inTelegram ? tg.initData : null, token: safeGet(TOKEN_KEY) }),
+        15_000,
+      ).catch(() => null);
       if (cancelled) return;
       if (res) {
         safeSet(TOKEN_KEY, res.token);
@@ -188,8 +216,10 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
     })();
     return () => {
       cancelled = true;
+      controller.abort();
+      removeInsetListeners?.();
     };
-  }, [attempt]);
+  }, []);
 
   const haptic = useCallback<AppContextValue["haptic"]>(
     kind => {
@@ -255,7 +285,10 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
       session,
       token: session?.token ?? null,
       authError,
-      retryAuth: () => setAttempt(a => a + 1),
+      retryAuth: () => {
+        // Next.js serializes server actions. Reload also releases a stalled queue.
+        window.location.reload();
+      },
       haptic,
       speed,
       setSpeed,

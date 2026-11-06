@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { withTimeout } from "@/lib/utils/with-timeout";
 import { getHome, type CatalogItem, type HomeView } from "@/lib/actions/player";
 import { useInviteFriend } from "@/lib/telegram/useInviteFriend";
 import { useApp } from "@/lib/telegram/TelegramProvider";
@@ -27,14 +28,22 @@ export function HomeScreen() {
   const invitation = useInviteFriend();
   const [home, setHome] = useState<HomeView | null>(null);
   const [failed, setFailed] = useState(false);
+  const request = useRef(0);
   const load = () => {
+    const id = ++request.current;
     setFailed(false);
-    getHome(token).then(setHome).catch(() => setFailed(true));
+    withTimeout(getHome(token), 15_000).then(result => {
+      if (id === request.current) setHome(result);
+    }).catch(() => {
+      if (id === request.current) setFailed(true);
+    });
   };
   useEffect(() => {
-    if (ready) load();
+    const requests = request;
+    if (ready && !authError) load();
+    return () => { requests.current++; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, token]);
+  }, [ready, token, authError]);
 
   const user = session?.user && !session.user.is_guest ? session.user : null;
   const items = home?.items || null;
@@ -53,7 +62,7 @@ export function HomeScreen() {
           <p>Кто-то уже набирает сообщение…</p>
         </div>
         {authError ? <ErrorState title="Не удалось войти" text="Проверьте соединение." action={retryAuth} />
-          : failed ? <ErrorState title="Нет соединения" text="Не получилось загрузить истории." action={load} />
+          : failed ? <ErrorState title="Нет соединения" text="Не получилось загрузить истории." action={() => window.location.reload()} />
           : !items ? <div className="library-loading" aria-label="Загружаем истории" aria-busy="true"><div className="skeleton" /><div className="skeleton" /></div>
           : !items.length ? <ErrorState icon="moon" title="Историй пока нет" text="Первая глава готовится к выходу. Загляните позже." />
           : <>
