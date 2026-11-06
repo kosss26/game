@@ -7,6 +7,7 @@ import { adminLogout } from "@/lib/actions/auth";
 const NAV = [
   { href: "/admin", label: "Обзор" },
   { href: "/admin/stories", label: "Истории" },
+  { href: "/admin/players", label: "Игроки" },
   { href: "/admin/analytics", label: "Аналитика" },
 ];
 
@@ -19,7 +20,7 @@ export function AdminNav() {
       <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
         <div>
           <h1 className="font-bold text-tg-text">Полночь · Студия</h1>
-          <p className="text-xs text-tg-text-hint">Управление историями</p>
+          <p className="text-xs text-tg-text-hint">Истории и игроки</p>
         </div>
         <div className="flex items-center gap-3 text-sm">
           <Link href="/" className="text-tg-accent">
