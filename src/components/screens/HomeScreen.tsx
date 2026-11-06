@@ -25,6 +25,8 @@ function continueStory(items: CatalogItem[]): CatalogItem | null {
 
 export function HomeScreen() {
   const { ready, token, session, authError, retryAuth } = useApp();
+  const [greetingText, setGreetingText] = useState("Добро пожаловать");
+  useEffect(() => { setGreetingText(greeting()); }, []);
   const invitation = useInviteFriend();
   const [home, setHome] = useState<HomeView | null>(null);
   const [failed, setFailed] = useState(false);
@@ -58,7 +60,7 @@ export function HomeScreen() {
     <main className="library-shell library-home">
       <div className="library-content">
         <div className="library-greeting">
-          <h1>{greeting()}{user ? `, ${user.first_name}` : ""}</h1>
+          <h1>{greetingText}{user ? `, ${user.first_name}` : ""}</h1>
           <p>Кто-то уже набирает сообщение…</p>
         </div>
         {authError ? <ErrorState title="Не удалось войти" text="Проверьте соединение." action={retryAuth} />

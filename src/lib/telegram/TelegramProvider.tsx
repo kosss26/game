@@ -155,6 +155,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    window.dispatchEvent(new Event("polnoch:hydrated"));
     let cancelled = false;
     const controller = new AbortController();
     let removeInsetListeners: (() => void) | undefined;

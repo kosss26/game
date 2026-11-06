@@ -16,7 +16,7 @@ MODE=${1:-status}
 die() { printf '\nОШИБКА: %s\n' "$*" >&2; exit 1; }
 say() { printf '\n== %s\n' "$*"; }
 [[ $EUID == 0 ]] || die 'Запустите от root'
-case "$MODE" in init|install|update|bot|status|renew|relay-config|relay-apply) ;; *) die 'Режимы: init | install | update | bot | status | renew | relay-config | relay-apply' ;; esac
+case "$MODE" in init|install|update|bot|status|startup-check|renew|relay-config|relay-apply) ;; *) die 'Режимы: init | install | update | bot | status | startup-check | renew | relay-config | relay-apply' ;; esac
 for cmd in docker git python3 curl openssl flock ss; do command -v "$cmd" >/dev/null || die "Не найдена команда $cmd"; done
 [[ ! -L "$STATE" && ! -L /etc/polnoch-stories && ! -L "$ACME" ]] || die 'Каталоги установки не должны быть символическими ссылками'
 mkdir -p "$STATE" /etc/polnoch-stories
@@ -288,6 +288,19 @@ case "$MODE" in
     ready
     compose ps
     curl -fsS --max-time 5 http://127.0.0.1:3500/api/health || true
+    ;;
+  startup-check)
+    ready
+    say 'Проверка запуска «Полночи» (без изменения сервисов)'
+    git -C "$ROOT" rev-parse --short=12 HEAD
+    compose ps
+    app_id=$(compose ps -aq app)
+    if [[ -n "$app_id" ]]; then
+      docker inspect --format 'App: status={{.State.Status}} restarts={{.RestartCount}} oom={{.State.OOMKilled}} started={{.State.StartedAt}}' "$app_id"
+    fi
+    curl -sS --max-time 5 http://127.0.0.1:3500/api/health || true
+    printf '\n'
+    python3 "$ROOT/scripts/check-startup.py" --url "https://$(get_env DOMAIN)"
     ;;
   renew)
     ready
