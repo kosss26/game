@@ -30,6 +30,8 @@ export interface ChatPlayerProps {
   } | null;
   inheritedFlags: Flags;
   preview?: boolean;
+  /** Последняя глава истории: кнопка «К финалу» вместо «Завершить главу» */
+  isLastDay?: boolean;
   onExit: () => void;
   onComplete: (result: { history: HistoryEntry[]; flags: Flags; ending: string | null }) => void;
 }
@@ -96,6 +98,8 @@ export function ChatPlayer(props: ChatPlayerProps) {
   const [log, setLog] = useState<HistoryEntry[]>(() => props.initial?.history || []);
   const [ui, setUi] = useState<Ui>({ kind: "running" });
   const [showSettings, setShowSettings] = useState(false);
+  const [endReady, setEndReady] = useState(false);
+  const endResult = useRef<{ history: HistoryEntry[]; flags: Flags; ending: string | null } | null>(null);
   const [showClues, setShowClues] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [activeThread, setActiveThread] = useState<string>(() => {
@@ -217,11 +221,18 @@ export function ChatPlayer(props: ChatPlayerProps) {
         }).catch(() => undefined);
       }
       finished.current = true;
-      await sleep(1100);
-      onComplete({ history: logRef.current, flags: flagsRef.current, ending });
+      // Не закрываем чат сам: игрок дочитывает и нажимает «Завершить главу»
+      endResult.current = { history: logRef.current, flags: flagsRef.current, ending };
+      setEndReady(true);
     },
-    [haptic, preview, token, storyId, dayId, version, onComplete]
+    [haptic, preview, token, storyId, dayId, version]
   );
+
+  const closeChapter = useCallback(() => {
+    if (!endResult.current) return;
+    haptic("select");
+    onComplete(endResult.current);
+  }, [haptic, onComplete]);
 
   // --- основной цикл ---
   const run = useCallback(
@@ -568,7 +579,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
     : activeThread !== view && (busyThere || (unread[activeThread] || 0) > 0)
       ? activeThread
       : lastUnread;
-  const waitingElsewhere = !!target && (view !== activeThread || ui.kind === "running" || ui.kind === "typing");
+  const waitingElsewhere = ui.kind !== "ended" && !!target && (view !== activeThread || ui.kind === "running" || ui.kind === "typing");
   const elsewhereLabel =
     target === activeThread && (ui.kind === "choice" || ui.kind === "input")
       ? "Ответить"
@@ -679,7 +690,15 @@ export function ChatPlayer(props: ChatPlayerProps) {
             {ui.kind === "input" && <InputPanel key={ui.step.scene.id} prompt={ui.step.prompt} placeholder={ui.step.placeholder} onSubmit={onInput} />}
             {ui.kind === "pause" && <PausePanel until={ui.until} total={ui.total} label={ui.label} onSkip={endPause} />}
             {(ui.kind === "running" || ui.kind === "typing") && <IdleComposer text={typingHere ? status : "Сообщение"} />}
-            {ui.kind === "ended" && <IdleComposer text={isGroup ? "Все вышли из сети" : "Собеседник вышел из сети"} />}
+            {ui.kind === "ended" && (
+              <div className="px-3 pb-3 pt-2.5 animate-fade-in">
+                <button onClick={closeChapter} disabled={!endReady} className="btn-primary min-h-[52px] w-full text-[16px]">
+                  <Icon name="check" size={18} strokeWidth={2.4} />
+                  {endReady ? (props.isLastDay ? "Завершить историю" : "Завершить главу") : "Сохраняем…"}
+                </button>
+                <p className="mt-1.5 text-center text-[12px] text-faint">Можно спокойно дочитать и пролистать чаты</p>
+              </div>
+            )}
           </>
         )}
       </div>
