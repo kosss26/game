@@ -35,6 +35,7 @@ export interface TelegramWebApp {
   setBottomBarColor?: (color: string) => void;
   onEvent: (event: string, cb: (...args: any[]) => void) => void;
   offEvent: (event: string, cb: (...args: any[]) => void) => void;
+  shareMessage?: (id: string, callback?: (sent: boolean) => void) => void;
   openInvoice?: (url: string, cb?: (status: "paid" | "cancelled" | "failed" | "pending") => void) => void;
   openTelegramLink: (url: string) => void;
   openLink: (url: string) => void;

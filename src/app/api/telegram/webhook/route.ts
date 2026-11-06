@@ -77,22 +77,6 @@ async function ensureUser(from: TgUser, refParam?: string) {
   }
 }
 
-async function publishedStories() {
-  try {
-    const supabase = await db();
-    const { data } = await supabase
-      .from("stories")
-      .select("id, title, meta, sort_order")
-      .eq("status", "published")
-      .order("sort_order", { ascending: true });
-    return ((data || []) as { id: string; title: string; meta: { tagline?: string; genre?: string; free?: boolean } | null }[])
-      .slice(0, 6)
-      .map(st => ({ id: st.id, title: st.title, tagline: st.meta?.tagline, genre: st.meta?.genre, free: !!st.meta?.free }));
-  } catch {
-    return [];
-  }
-}
-
 async function handleCommand(chatId: number, from: TgUser | undefined, text: string) {
   const [cmd, ...args] = text.trim().split(/\s+/);
   const command = cmd.split("@")[0].toLowerCase();
@@ -100,13 +84,7 @@ async function handleCommand(chatId: number, from: TgUser | undefined, text: str
   if (command === "/start") {
     if (from) await ensureUser(from, args[0]);
     if (args[0] === "support" || args[0] === "paysupport") { await promptSupport(chatId, args[0] === "paysupport"); return; }
-    const stories = await publishedStories();
-    const appUrl = config.appUrl;
-    const keyboard = [
-      ...stories.map(st => [{ text: `▶️ ${st.title}${st.free ? " · бесплатно" : ""}`, web_app: { url: `${appUrl}/story/${st.id}` } }]),
-      [{ text: "🌙 Все истории", web_app: { url: `${appUrl}/` } }],
-    ];
-    await sendMessage(chatId, welcomeMessage(from?.first_name || "друг", stories.length > 0), { reply_markup: { inline_keyboard: keyboard } });
+    await sendMessage(chatId, welcomeMessage(from?.first_name || "друг"), { reply_markup: webAppButton("Открыть истории") });
     return;
   }
   if (command === "/support" || command === "/paysupport") {

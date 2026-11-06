@@ -7,12 +7,12 @@ describe("release bot copy", () => {
     expect(new Set(BOT_COMMANDS.map(command => command.command)).size).toBe(BOT_COMMANDS.length);
     expect(BOT_COMMANDS.map(command => command.command)).toEqual(expect.arrayContaining(["start", "support", "paysupport", "help", "terms"]));
   });
-  test("welcome escapes user input and handles an empty catalog", () => {
-    const message = welcomeMessage("<b>Аня & Катя</b>", true);
+  test("welcome escapes user input without enumerating the catalog", () => {
+    const message = welcomeMessage("<b>Аня & Катя</b>");
     expect(message).toContain("&lt;b&gt;Аня &amp; Катя&lt;/b&gt;");
     expect(message).not.toContain("живые персонажи");
     expect(message.length).toBeLessThan(800);
-    expect(welcomeMessage("Аня", false)).not.toContain("историю ниже");
+    expect(welcomeMessage("Аня")).not.toContain("историю ниже");
     expect(HELP_MESSAGE).toContain("/support");
   });
 });

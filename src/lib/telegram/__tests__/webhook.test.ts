@@ -17,13 +17,14 @@ function request(text: string, secret = "qa-secret", extra = {}) {
 }
 beforeEach(() => send.mockClear());
 test("invalid webhook secret never triggers a reply", async () => { expect((await POST(request("/start", "wrong"))).status).toBe(401); expect(send).not.toHaveBeenCalled(); });
-test("start sends concise escaped welcome with real catalog buttons", async () => {
+test("start sends concise escaped welcome with a single app button", async () => {
   expect((await POST(request("/start"))).status).toBe(200);
   expect(send).toHaveBeenCalledTimes(1);
   expect(send.mock.calls[0][1]).toContain("&lt;Анна&gt;");
   const keyboard = send.mock.calls[0][2]?.reply_markup as {inline_keyboard: Array<Array<{text: string; web_app: {url: string}}>>};
-  expect(keyboard.inline_keyboard).toHaveLength(3);
-  expect(keyboard.inline_keyboard[0][0].web_app.url).toBe("https://stories.invalid/story/story-1");
+  expect(keyboard.inline_keyboard).toHaveLength(1);
+  expect(keyboard.inline_keyboard[0][0].text).toBe("Открыть истории");
+  expect(keyboard.inline_keyboard[0][0].web_app.url).toBe("https://stories.invalid/");
 });
 test("support deep link opens the reply prompt, not the catalog", async () => {
   await POST(request("/start support"));

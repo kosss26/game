@@ -3,10 +3,11 @@
 import { db } from "@/lib/supabase/server";
 import { resolveUser, isUserAdmin } from "@/lib/auth/session";
 import { config } from "@/lib/config";
+import { invitationLink } from "@/lib/invitation-links";
 import { isGlobalFree } from "@/lib/settings";
 import { computeAccess, canPlay, hasSeasonPass, type DayAccess } from "@/lib/game/access";
 import { encodePayload, grantPurchase, isUuid } from "@/lib/game/purchases";
-import { createStarsInvoiceLink, miniAppLink } from "@/lib/telegram/bot";
+import { createStarsInvoiceLink } from "@/lib/telegram/bot";
 import type {
   Character,
   Day,
@@ -232,7 +233,7 @@ export async function getHome(token: string | null): Promise<HomeView> {
   const user = await resolveUser(token);
   return {
     items: await buildCatalog(user),
-    shareLink: miniAppLink(user && !user.is_guest ? `ref_${user.telegram_id}` : undefined),
+    shareLink: invitationLink(user && !user.is_guest ? Number(user.telegram_id) : undefined),
     isGuest: !user || !!user.is_guest,
   };
 }
@@ -276,7 +277,7 @@ export async function getProfile(token: string | null): Promise<ProfileView> {
     },
     stories: profileStories,
     credits: user?.skip_credits ?? 0,
-    shareLink: miniAppLink(user && !user.is_guest ? `ref_${user.telegram_id}` : undefined),
+    shareLink: invitationLink(user && !user.is_guest ? Number(user.telegram_id) : undefined),
     invited,
     referralBonus: config.referralBonus,
     freeAccess: await hasFreeAccess(user),
@@ -309,7 +310,7 @@ export async function getStoryView(token: string | null, storyId: string): Promi
     freeAccess: ctx.free,
     storyFree: ctx.storyFree,
     endingsUnlocked: endings,
-    shareLink: miniAppLink(user && !user.is_guest ? `ref_${user.telegram_id}` : undefined),
+    shareLink: invitationLink(user && !user.is_guest ? Number(user.telegram_id) : undefined),
     isGuest: !!user?.is_guest,
   };
 }

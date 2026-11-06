@@ -5,7 +5,7 @@ import { TelegramProvider } from "@/lib/telegram/TelegramProvider";
 
 export const metadata: Metadata = {
   title: "Полночь — истории в переписке",
-  description: "Интерактивные истории, которые происходят в чате. Каждый день — новая глава, ваши ответы меняют финал.",
+  description: "Интерактивные истории, которые происходят в чате. Ваши ответы меняют ход событий и финал.",
   robots: { index: false },
 };
 

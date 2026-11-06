@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getStoryView, restartStory, type StoryView } from "@/lib/actions/player";
+import { useInviteFriend } from "@/lib/telegram/useInviteFriend";
 import { useApp, useBackButton } from "@/lib/telegram/TelegramProvider";
 import type { DayAccess } from "@/lib/game/access";
 import { CoverArt } from "@/components/ui/CoverArt";
@@ -16,7 +17,8 @@ import { chaptersLabel, plural } from "@/lib/utils/plural";
 
 export function StoryScreen({ storyId }: { storyId: string }) {
   const router = useRouter();
-  const { ready, token, confirm, share, haptic, authError, retryAuth } = useApp();
+  const { ready, token, confirm, haptic, authError, retryAuth } = useApp();
+  const invitation = useInviteFriend();
   const [view, setView] = useState<StoryView | null | undefined>(undefined);
   const [failed, setFailed] = useState(false);
   const [restartBusy, setRestartBusy] = useState(false);
@@ -46,7 +48,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
   const speaker = preview && meta.characters?.[preview.character];
   const genre = meta.genre?.split(" · ").pop();
   const synopsis = meta.synopsis || story.description?.split(/\n\s*\n/)[0];
-  const onShare = () => { if (view.shareLink) { haptic("select"); share(view.shareLink, meta.share_text || `«${story.title}» — ${meta.tagline || "интерактивная история"}`); } };
+  const onShare = () => invitation.invite(view.shareLink);
   const onRestart = async () => {
     if (!(await confirm("Начать историю заново? Прогресс будет сброшен, открытые концовки сохранятся."))) return;
     haptic("warning"); setRestartBusy(true); setRestartError(false);
@@ -60,7 +62,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
       <header className="story-toolbar">
         {!native ? <Link href="/" className="story-round-button" aria-label="Назад к историям"><Icon name="back" size={25} /></Link> : <span />}
         <span>История</span>
-        {view.shareLink ? <button type="button" className="story-round-button" aria-label="Поделиться историей" onClick={onShare}><Icon name="forward" size={24} /></button> : <span />}
+        {view.shareLink ? <button type="button" className="story-round-button" aria-label="Пригласить друга" disabled={invitation.busy} aria-busy={invitation.busy} onClick={onShare}><Icon name="forward" size={24} /></button> : <span />}
       </header>
       {meta.age_rating && <span className="story-age">{meta.age_rating}</span>}
       <div className="story-hero-copy">

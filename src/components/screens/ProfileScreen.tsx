@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getProfile, type ProfileStory, type ProfileView } from "@/lib/actions/player";
+import { useInviteFriend } from "@/lib/telegram/useInviteFriend";
 import { useApp, useBackButton, type Speed } from "@/lib/telegram/TelegramProvider";
 import { CoverArt } from "@/components/ui/CoverArt";
 import { Icon } from "@/components/ui/Icon";
@@ -19,7 +20,8 @@ const SPEEDS: Array<{ id: Speed; title: string; hint: string }> = [
 
 export function ProfileScreen() {
   const router = useRouter();
-  const { ready, token, session, speed, setSpeed, timers, setTimers, share, haptic, authError, retryAuth } = useApp();
+  const { ready, token, session, speed, setSpeed, timers, setTimers, haptic, authError, retryAuth } = useApp();
+  const invitation = useInviteFriend();
   const [view, setView] = useState<ProfileView | null>(null);
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
@@ -39,10 +41,7 @@ export function ProfileScreen() {
 
   const name = view.name || (!view.isGuest ? session?.user.first_name : null) || "Гость";
   const stories = [...view.stories].sort((a, b) => Number(b.completedDays > 0 || b.status === "in_progress") - Number(a.completedDays > 0 || a.status === "in_progress"));
-  const invite = () => {
-    haptic("select");
-    share(view.shareLink, "Играю в «Полночь» — истории, которые происходят прямо в переписке. Попробуй, потом сравним концовки 🌙");
-  };
+
 
   return (
     <main className="library-shell library-profile">
@@ -65,7 +64,7 @@ export function ProfileScreen() {
           {stories.length ? <div className="library-endings-list">{stories.map(story => <EndingsCard key={story.id} story={story} open={open === story.id} onToggle={() => { haptic("select"); setOpen(open === story.id ? null : story.id); }} />)}</div> : <p className="library-empty-copy">Здесь появятся концовки ваших историй.</p>}
         </section>
         {!view.isGuest && view.shareLink && <section className="library-invitation">
-          <button className="library-invite library-panel" onClick={invite}><span className="library-invite-icon"><Icon name="share" size={23} /></span><span><span className="library-invite-title">Пригласить друга</span><span className="library-invite-hint">Сравните ваши концовки</span></span><Icon name="chevron" size={20} /></button>
+          <button className="library-invite library-panel" disabled={invitation.busy} aria-busy={invitation.busy} onClick={() => invitation.invite(view.shareLink)}><span className="library-invite-icon"><Icon name="share" size={23} /></span><span><span className="library-invite-title">Пригласить друга</span><span className="library-invite-hint">Сравните ваши концовки</span></span><Icon name="chevron" size={20} /></button>
           {!view.freeAccess && <p className="library-referral-copy">За друга — {view.referralBonus} {plural(view.referralBonus, "пропуск ожидания", "пропуска ожидания", "пропусков ожидания")}. Доступно: {view.credits}.</p>}
           {view.invited > 0 && <p className="library-referral-copy">С вами уже {view.invited} {plural(view.invited, "друг", "друга", "друзей")}</p>}
         </section>}

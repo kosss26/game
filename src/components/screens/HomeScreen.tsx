@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getHome, type CatalogItem, type HomeView } from "@/lib/actions/player";
+import { useInviteFriend } from "@/lib/telegram/useInviteFriend";
 import { useApp } from "@/lib/telegram/TelegramProvider";
 import { CoverArt } from "@/components/ui/CoverArt";
 import { Icon } from "@/components/ui/Icon";
@@ -22,7 +23,8 @@ function continueStory(items: CatalogItem[]): CatalogItem | null {
 }
 
 export function HomeScreen() {
-  const { ready, token, session, authError, retryAuth, share } = useApp();
+  const { ready, token, session, authError, retryAuth } = useApp();
+  const invitation = useInviteFriend();
   const [home, setHome] = useState<HomeView | null>(null);
   const [failed, setFailed] = useState(false);
   const load = () => {
@@ -41,9 +43,7 @@ export function HomeScreen() {
     || items?.find(item => item.status === "new" && item.id !== resume?.id)
     || items?.find(item => item.id !== resume?.id) || null;
   const rest = items?.filter(item => item.id !== featured?.id && item.id !== resume?.id) || [];
-  const invite = () => {
-    if (home?.shareLink) share(home.shareLink, "Истории, которые происходят в переписке. Попробуй — потом сравним концовки 🌙");
-  };
+
 
   return (
     <main className="library-shell library-home">
@@ -66,7 +66,7 @@ export function HomeScreen() {
               <h2 id="catalog-heading" className="library-section-title">Все истории</h2>
               <div className="library-story-list">{rest.map(item => <StoryRow key={item.id} item={item} />)}</div>
             </section>}
-            {!home?.isGuest && home?.shareLink && <button className="library-home-invite" onClick={invite}><Icon name="share" size={16} /> Пригласить друга</button>}
+            {!home?.isGuest && home?.shareLink && <button className="library-home-invite" disabled={invitation.busy} aria-busy={invitation.busy} onClick={() => invitation.invite(home.shareLink)}><Icon name="share" size={16} /> Пригласить друга</button>}
           </>}
         <footer className="library-legal"><Link href="/legal">Условия и конфиденциальность</Link></footer>
       </div>
