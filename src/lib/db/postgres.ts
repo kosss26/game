@@ -141,6 +141,11 @@ class Query implements PromiseLike<Result> {
     else this.where.push(`${ident(col)} IN (${vs.map(v => this.p(v)).join(", ")})`);
     return this;
   }
+  /** Поиск без учёта регистра: шаблон в формате SQL LIKE (%, _) */
+  ilike(col: string, pattern: string) {
+    this.where.push(`${ident(col)}::text ILIKE ${this.p(pattern)}`);
+    return this;
+  }
   is(col: string, v: null | boolean) {
     this.where.push(`${ident(col)} IS ${v === null ? "NULL" : v ? "TRUE" : "FALSE"}`);
     return this;

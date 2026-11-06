@@ -119,6 +119,11 @@ function storyMeta(s: Pick<Story, "meta">): StoryMeta {
   return (s.meta || {}) as StoryMeta;
 }
 
+/** Бесплатный доступ: включён для всех (FREE_ACCESS) или выдан игроку в студии */
+function hasFreeAccess(user: User | null): boolean {
+  return config.freeAccess || !!user?.meta?.free_access;
+}
+
 async function loadAccessContext(user: User | null, storyId: string) {
   const supabase = await db();
   const [{ data: days }, progressRes, purchaseRes] = await Promise.all([
@@ -145,7 +150,7 @@ async function loadAccessContext(user: User | null, storyId: string) {
     purchases,
     now: Date.now(),
     isAdmin,
-    freeAccess: config.freeAccess,
+    freeAccess: hasFreeAccess(user),
     defaultWaitHours: config.defaultWaitHours,
   });
   return { allDays, progresses, purchases, access, isAdmin };
@@ -265,7 +270,7 @@ export async function getProfile(token: string | null): Promise<ProfileView> {
     shareLink: miniAppLink(user && !user.is_guest ? `ref_${user.telegram_id}` : undefined),
     invited,
     referralBonus: config.referralBonus,
-    freeAccess: config.freeAccess,
+    freeAccess: hasFreeAccess(user),
   };
 }
 
@@ -291,8 +296,8 @@ export async function getStoryView(token: string | null, storyId: string): Promi
     credits: user?.skip_credits ?? 0,
     hasPass: hasSeasonPass(ctx.purchases),
     prices: config.prices,
-    paymentsEnabled: !!config.botToken && !user?.is_guest && !config.freeAccess,
-    freeAccess: config.freeAccess,
+    paymentsEnabled: !!config.botToken && !user?.is_guest && !hasFreeAccess(user),
+    freeAccess: hasFreeAccess(user),
     endingsUnlocked: endings,
     shareLink: miniAppLink(user && !user.is_guest ? `ref_${user.telegram_id}` : undefined),
     isGuest: !!user?.is_guest,

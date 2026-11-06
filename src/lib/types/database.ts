@@ -286,7 +286,13 @@ export interface User {
   referred_by?: string | null;
   skip_credits?: number;
   bot_blocked?: boolean;
-  meta?: { endings?: Record<string, string[]> } | null;
+  meta?: {
+    endings?: Record<string, string[]>;
+    /** Бесплатный доступ ко всем историям, выданный в студии */
+    free_access?: boolean;
+    free_access_at?: string;
+    free_access_note?: string;
+  } | null;
   created_at: string;
 }
 
