@@ -167,7 +167,7 @@ function Reread({
   const last: Record<string, string> = {};
   for (const h of history) if (!h.hidden) last[h.thread || "main"] = previewText(h.text);
   return (
-    <div className="chat-bg flex h-[100dvh] flex-col">
+    <div className="chat-bg px-safe flex h-[100dvh] flex-col">
       <header className="glass border-b border-white/[0.06] pt-safe">
         <div className="flex h-14 items-center gap-2 px-2">
           {!native && (

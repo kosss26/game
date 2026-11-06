@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { signIn } from "@/lib/actions/auth";
 import { withTimeout } from "@/lib/utils/with-timeout";
+import { setupTelegramViewport, type TelegramViewport } from "./viewport";
 
 // ---------------------------------------------------------------------------
 // Типы Telegram WebApp (используемое подмножество)
@@ -10,7 +11,7 @@ import { withTimeout } from "@/lib/utils/with-timeout";
 
 type HapticStyle = "light" | "medium" | "heavy" | "rigid" | "soft";
 
-export interface TelegramWebApp {
+export interface TelegramWebApp extends TelegramViewport {
   initData: string;
   initDataUnsafe: { user?: { id: number; first_name: string; username?: string }; start_param?: string };
   version: string;
@@ -139,14 +140,6 @@ function waitForTelegram(signal: AbortSignal, timeoutMs = 8000): Promise<Telegra
   });
 }
 
-function applyInsets(tg: TelegramWebApp) {
-  const root = document.documentElement;
-  const safe = tg.safeAreaInset;
-  const content = tg.contentSafeAreaInset;
-  root.style.setProperty("--tg-content-safe-top", `${(safe?.top || 0) + (content?.top || 0)}px`);
-  root.style.setProperty("--tg-content-safe-bottom", `${(safe?.bottom || 0) + (content?.bottom || 0)}px`);
-}
-
 export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [webApp, setWebApp] = useState<TelegramWebApp | null>(null);
   const [ready, setReady] = useState(false);
@@ -180,20 +173,12 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
       // Release Telegram's native loading screen before any network sign-in.
       try { tg.ready(); } catch { /* old clients */ }
       if (tg && inTelegram) {
+        removeInsetListeners = setupTelegramViewport(tg, document.documentElement.style);
         try {
-          tg.expand();
           tg.setHeaderColor?.(BG);
           tg.setBackgroundColor?.(BG);
           tg.setBottomBarColor?.(BG);
           tg.disableVerticalSwipes?.();
-          applyInsets(tg);
-          const onInsets = () => applyInsets(tg);
-          tg.onEvent("safeAreaChanged", onInsets);
-          tg.onEvent("contentSafeAreaChanged", onInsets);
-          removeInsetListeners = () => {
-            tg.offEvent("safeAreaChanged", onInsets);
-            tg.offEvent("contentSafeAreaChanged", onInsets);
-          };
         } catch {
           // старые клиенты Telegram
         }

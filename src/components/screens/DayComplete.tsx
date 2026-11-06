@@ -74,7 +74,7 @@ export function DayComplete(p: Props) {
   const allEndings = Object.entries(p.storyMeta.endings || {});
 
   return (
-    <div className="relative min-h-[100dvh] overflow-hidden bg-ink">
+    <div className="px-safe pb-safe relative min-h-[100dvh] overflow-hidden bg-ink">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[46vh] opacity-60">
         <CoverArt style={p.coverStyle} className="h-full w-full" />
         <div className="absolute inset-0 bg-gradient-to-b from-ink/30 via-ink/70 to-ink" />

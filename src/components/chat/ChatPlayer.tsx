@@ -588,7 +588,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
         : "Новые сообщения";
 
   return (
-    <div className="chat-bg relative flex h-[100dvh] flex-col overflow-hidden">
+    <div className="chat-bg px-safe relative flex h-[100dvh] flex-col overflow-hidden">
       {/* Шапка */}
       <header className="glass relative z-20 border-b border-white/[0.06] pt-safe">
         <div className="flex h-14 items-center gap-2 px-2">
