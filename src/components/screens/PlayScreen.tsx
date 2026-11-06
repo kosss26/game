@@ -117,6 +117,7 @@ export function PlayScreen({ storyId, dayNumber }: { storyId: string; dayNumber:
       mainCharacter={p.story.meta.main_character}
       storyMeta={p.story.meta}
       inheritedFlags={p.inheritedFlags}
+      isLastDay={p.isLastDay}
       initial={
         p.progress
           ? {
