@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["pg"],
   poweredByHeader: false,
+  // Our only dynamic metadata is a local invitation lookup. Keep it in <head>
+  // for Telegram's preview crawler instead of streaming it after the page body.
+  htmlLimitedBots: /.*/,
   experimental: {
     cpus: 1, // Bound build workers on a shared VPS.
     serverActions: {
