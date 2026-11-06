@@ -16,7 +16,8 @@ export function analyzeDay(scenes: Scene[], choices: Choice[]) {
   const tagIndex = new Map<string, number>();
   sorted.forEach((s, i) => s.tag && tagIndex.set(s.tag, i));
   const byScene = new Map<string, Choice[]>();
-  for (const c of choices) byScene.set(c.scene_id, [...(byScene.get(c.scene_id) || []), c]);
+  for (const c of choices)
+    byScene.set(c.scene_id, [...(byScene.get(c.scene_id) || []), c]);
 
   const edges = (i: number): number[] => {
     const s = sorted[i];
@@ -28,7 +29,12 @@ export function analyzeDay(scenes: Scene[], choices: Choice[]) {
         const out: number[] = [];
         if (m.goto_tag) {
           const t = tagIndex.get(m.goto_tag);
-          if (t === undefined) issues.push({ type: "error", message: `Переход на несуществующую метку «${m.goto_tag}»`, sceneIndex: i });
+          if (t === undefined)
+            issues.push({
+              type: "error",
+              message: `Переход на несуществующую метку «${m.goto_tag}»`,
+              sceneIndex: i,
+            });
           else out.push(t);
           if (m.condition) out.push(i + 1);
         } else if (m.skip) {
@@ -42,21 +48,45 @@ export function analyzeDay(scenes: Scene[], choices: Choice[]) {
       }
       case "choice": {
         const list = byScene.get(s.id) || [];
-        if (list.length === 0) issues.push({ type: "error", message: "Выбор без вариантов", sceneIndex: i });
-        if (list.length === 1 && !list[0].condition) issues.push({ type: "warning", message: "Выбор с единственным вариантом", sceneIndex: i });
-        if (list.length > 0 && list.every(c => c.condition)) issues.push({ type: "warning", message: "Все варианты условные — выбор может быть пропущен", sceneIndex: i });
-        return list.map(c => {
+        if (list.length === 0)
+          issues.push({
+            type: "error",
+            message: "Выбор без вариантов",
+            sceneIndex: i,
+          });
+        if (list.length === 1 && !list[0].condition)
+          issues.push({
+            type: "warning",
+            message: "Выбор с единственным вариантом",
+            sceneIndex: i,
+          });
+        if (list.length > 0 && list.every((c) => c.condition))
+          issues.push({
+            type: "warning",
+            message: "Все варианты условные — выбор может быть пропущен",
+            sceneIndex: i,
+          });
+        return list.map((c) => {
           if (!c.goto_tag) return i + 1;
           const t = tagIndex.get(c.goto_tag);
           if (t === undefined) {
-            issues.push({ type: "error", message: `Вариант «${c.label}» ведёт на несуществующую метку «${c.goto_tag}»`, sceneIndex: i });
+            issues.push({
+              type: "error",
+              message: `Вариант «${c.label}» ведёт на несуществующую метку «${c.goto_tag}»`,
+              sceneIndex: i,
+            });
             return -1;
           }
           return t;
         });
       }
       default:
-        if (s.type === "message" && !s.text) issues.push({ type: "warning", message: "Пустая реплика", sceneIndex: i });
+        if (s.type === "message" && !s.text)
+          issues.push({
+            type: "warning",
+            message: "Пустая реплика",
+            sceneIndex: i,
+          });
         return [i + 1];
     }
   };
@@ -81,41 +111,91 @@ export function analyzeDay(scenes: Scene[], choices: Choice[]) {
     for (const n of edges(i)) if (!seen.has(n)) queue.push(n);
   }
 
-  const unreachable = sorted.map((s, i) => ({ s, i })).filter(({ s, i }) => !seen.has(i) && s.type !== "jump" && s.type !== "set");
+  const unreachable = sorted
+    .map((s, i) => ({ s, i }))
+    .filter(
+      ({ s, i }) => !seen.has(i) && s.type !== "jump" && s.type !== "set",
+    );
   if (unreachable.length) {
-    issues.push({ type: "warning", message: `Недостижимых сцен: ${unreachable.length} (первая — #${unreachable[0].i + 1}: «${(unreachable[0].s.text || unreachable[0].s.type).slice(0, 40)}»). Возможно, забыт переход «-> метка».` });
+    issues.push({
+      type: "warning",
+      message: `Недостижимых сцен: ${unreachable.length} (первая — #${unreachable[0].i + 1}: «${(unreachable[0].s.text || unreachable[0].s.type).slice(0, 40)}»). Возможно, забыт переход «-> метка».`,
+    });
   }
-  if (sorted.length && !reachesEnd) issues.push({ type: "error", message: "Ни одна ветка не доходит до конца дня (бесконечный цикл?)" });
+  if (sorted.length && !reachesEnd)
+    issues.push({
+      type: "error",
+      message: "Ни одна ветка не доходит до конца дня (бесконечный цикл?)",
+    });
 
-  return { issues, endings: [...endings], reachable: seen.size, total: sorted.length };
+  return {
+    issues,
+    endings: [...endings],
+    reachable: seen.size,
+    total: sorted.length,
+  };
 }
 
-export function DayValidator({ scenes, choices }: { day: Day; scenes: Scene[]; choices: Choice[] }) {
-  const { issues, endings, reachable, total } = useMemo(() => analyzeDay(scenes, choices), [scenes, choices]);
-  const errors = issues.filter(i => i.type === "error");
-  const warnings = issues.filter(i => i.type === "warning");
+export function DayValidator({
+  scenes,
+  choices,
+}: {
+  day: Day;
+  scenes: Scene[];
+  choices: Choice[];
+}) {
+  const { issues, endings, reachable, total } = useMemo(
+    () => analyzeDay(scenes, choices),
+    [scenes, choices],
+  );
+  const errors = issues.filter((i) => i.type === "error");
+  const warnings = issues.filter((i) => i.type === "warning");
 
   if (scenes.length === 0) {
-    return <div className="rounded-xl bg-tg-bg-secondary py-12 text-center text-tg-text-hint">Сохраните скрипт, чтобы проверить день</div>;
+    return (
+      <div className="rounded-xl bg-tg-bg-secondary py-12 text-center text-tg-text-hint">
+        Сохраните сценарий, чтобы проверить главу
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        <Stat label="ошибок" value={errors.length} tone={errors.length ? "bad" : "good"} />
-        <Stat label="предупреждений" value={warnings.length} tone={warnings.length ? "warn" : "good"} />
-        <Stat label="достижимо сцен" value={`${reachable}/${total}`} tone="neutral" />
+        <Stat
+          label="ошибок"
+          value={errors.length}
+          tone={errors.length ? "bad" : "good"}
+        />
+        <Stat
+          label="предупреждений"
+          value={warnings.length}
+          tone={warnings.length ? "warn" : "good"}
+        />
+        <Stat
+          label="достижимо сцен"
+          value={`${reachable}/${total}`}
+          tone="neutral"
+        />
       </div>
 
       {errors.length === 0 && warnings.length === 0 && (
-        <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-center text-green-400">✅ День готов к публикации</div>
+        <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-center text-green-400">
+          Проверка пройдена — можно перейти к публикации
+        </div>
       )}
 
       {[...errors, ...warnings].length > 0 && (
         <ul className="space-y-2 rounded-xl bg-tg-bg-secondary p-4">
           {[...errors, ...warnings].map((i, k) => (
-            <li key={k} className={`text-sm ${i.type === "error" ? "text-red-300" : "text-yellow-300"}`}>
-              {i.type === "error" ? "❌" : "⚠️"} {i.sceneIndex !== undefined && <span className="font-mono">#{i.sceneIndex + 1}: </span>}
+            <li
+              key={k}
+              className={`text-sm ${i.type === "error" ? "text-red-300" : "text-yellow-300"}`}
+            >
+              {i.type === "error" ? "❌" : "⚠️"}{" "}
+              {i.sceneIndex !== undefined && (
+                <span className="font-mono">#{i.sceneIndex + 1}: </span>
+              )}
               {i.message}
             </li>
           ))}
@@ -124,15 +204,29 @@ export function DayValidator({ scenes, choices }: { day: Day; scenes: Scene[]; c
 
       {endings.length > 0 && (
         <div className="rounded-xl bg-tg-bg-secondary p-4 text-sm text-tg-text-secondary">
-          Концовки в этом дне: <span className="text-tg-text">{endings.join(", ")}</span>
+          Концовки в этой главе:{" "}
+          <span className="text-tg-text">{endings.join(", ")}</span>
         </div>
       )}
     </div>
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number | string; tone: "good" | "bad" | "warn" | "neutral" }) {
-  const color = { good: "text-green-400", bad: "text-red-400", warn: "text-yellow-400", neutral: "text-tg-accent" }[tone];
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  tone: "good" | "bad" | "warn" | "neutral";
+}) {
+  const color = {
+    good: "text-green-400",
+    bad: "text-red-400",
+    warn: "text-yellow-400",
+    neutral: "text-tg-accent",
+  }[tone];
   return (
     <div className="rounded-xl bg-tg-bg-secondary p-3 text-center">
       <p className={`text-xl font-bold ${color}`}>{value}</p>

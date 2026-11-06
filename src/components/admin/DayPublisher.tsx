@@ -1,107 +1,114 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { publishDay } from "@/lib/actions/admin";
 import type { Day, Scene } from "@/lib/types/database";
-
-interface DayPublisherProps {
+import { Icon } from "@/components/ui/Icon";
+import { StudioStatus } from "./StudioUI";
+export function DayPublisher({
+  day,
+  scenes,
+  hasUnsavedChanges = false,
+}: {
   day: Day;
   scenes: Scene[];
-}
-
-export function DayPublisher({ day, scenes }: DayPublisherProps) {
+  hasUnsavedChanges?: boolean;
+}) {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-
-  const canPublish = scenes.length > 0;
-
-  const handlePublish = async () => {
-    if (!confirm("Опубликовать день? Будет создан неизменяемый снапшот текущих сцен.")) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const published = day.status === "published";
+  const publish = async () => {
+    if (hasUnsavedChanges) return;
+    if (
+      !confirm(
+        "Опубликовать сохранённую версию главы? Будет создана отдельная версия для игроков.",
+      )
+    )
       return;
-    }
-
-    setIsLoading(true);
+    setBusy(true);
+    setError(null);
     try {
       await publishDay(day.id);
       router.refresh();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Ошибка публикации");
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Не удалось опубликовать главу",
+      );
     } finally {
-      setIsLoading(false);
+      setBusy(false);
     }
   };
-
-  if (day.status === "published") {
-    return (
-      <div className="space-y-4">
-        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 text-center">
-          <span className="text-4xl">🚀</span>
-          <h3 className="text-lg font-bold text-green-400 mt-3">День опубликован!</h3>
-          <p className="text-sm text-green-300/70 mt-2">
-            Игроки могут проходить этот день
-          </p>
-        </div>
-
-        <div className="bg-tg-bg-secondary rounded-xl p-4">
-          <h4 className="text-sm font-medium text-tg-text-secondary mb-3">
-            Что дальше?
-          </h4>
-          <ul className="space-y-2 text-sm text-tg-text-hint">
-            <li>• Редактирование сцен создаст новый черновик</li>
-            <li>• Опубликованный снапшот останется неизменным</li>
-            <li>• Для обновления нужно опубликовать заново</li>
-          </ul>
-        </div>
-
-        <Link
-          href={`/play/${day.story_id}/${day.day_number}`}
-          target="_blank"
-          className="block w-full py-4 bg-tg-accent text-white text-center font-medium rounded-xl"
-        >
-          👀 Открыть как игрок
-        </Link>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-4">
-      <div className="bg-tg-bg-secondary rounded-xl p-6 text-center">
-        <span className="text-4xl">📦</span>
-        <h3 className="text-lg font-bold text-tg-text mt-3">Черновик</h3>
-        <p className="text-sm text-tg-text-secondary mt-2">
-          {scenes.length} сцен готовы к публикации
+    <section className="studio-panel">
+      <div className="studio-section-heading">
+        <h2>
+          {published ? "Глава опубликована" : "Последний шаг перед читателем"}
+        </h2>
+        <StudioStatus published={published} />
+      </div>
+      <p className="studio-description">
+        {published
+          ? "Игроки проходят опубликованную версию. Изменения сценария сначала сохраняются в черновик."
+          : "Сначала сохраните сценарий, проверьте переходы и пройдите главу в тестовом плеере."}
+      </p>
+      <ol className="studio-publish-checklist">
+        <li>
+          <Icon name={scenes.length ? "check" : "file"} size={18} />
+          <span>
+            <b>
+              {scenes.length
+                ? `${scenes.length} сцен в сохранённом сценарии`
+                : "Сценарий пока пуст"}
+            </b>
+            <small>Несохранённый текст редактора не публикуется.</small>
+          </span>
+        </li>
+        <li>
+          <Icon name="lock" size={18} />
+          <span>
+            <b>Прогресс читателей сохраняется</b>
+            <small>Каждое прохождение использует свою версию истории.</small>
+          </span>
+        </li>
+        <li>
+          <Icon name="book" size={18} />
+          <span>
+            <b>Проверьте доступность истории</b>
+            <small>
+              История тоже должна быть опубликована, чтобы появиться в каталоге.
+            </small>
+          </span>
+        </li>
+      </ol>
+      {error && (
+        <p role="alert" className="studio-error">
+          {error}
         </p>
-      </div>
-
-      {!canPublish && (
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
-          <p className="text-sm text-yellow-400">
-            ⚠️ Добавьте хотя бы одну сцену перед публикацией
-          </p>
-        </div>
       )}
-
-      <div className="bg-tg-bg-secondary rounded-xl p-4">
-        <h4 className="text-sm font-medium text-tg-text-secondary mb-3">
-          При публикации:
-        </h4>
-        <ul className="space-y-2 text-sm text-tg-text-hint">
-          <li>✓ Создаётся неизменяемый снапшот</li>
-          <li>✓ День становится доступен игрокам</li>
-          <li>✓ Можно продолжать редактировать черновик</li>
-        </ul>
+      <div className="studio-form-actions">
+        {published ? (
+          <Link
+            className="studio-button"
+            href={`/play/${day.story_id}/${day.day_number}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Icon name="play" size={15} />
+            Открыть как игрок
+          </Link>
+        ) : (
+          <button
+            className="studio-button"
+            disabled={!scenes.length || busy || hasUnsavedChanges}
+            onClick={publish}
+          >
+            {busy ? "Публикуем…" : "Опубликовать главу"}
+            <Icon name="forward" size={16} />
+          </button>
+        )}
       </div>
-
-      <button
-        onClick={handlePublish}
-        disabled={!canPublish || isLoading}
-        className="w-full py-4 bg-tg-accent text-white font-medium rounded-xl disabled:opacity-50"
-      >
-        {isLoading ? "Публикация..." : "🚀 Опубликовать день"}
-      </button>
-    </div>
+    </section>
   );
 }

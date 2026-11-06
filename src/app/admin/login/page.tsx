@@ -1,48 +1,82 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminLogin } from "@/lib/actions/auth";
-import { Brand } from "@/components/ui/States";
-
+import { Icon } from "@/components/ui/Icon";
+import "../studio.css";
 export default function AdminLoginPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
+  const [visible, setVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
   return (
-    <main className="flex min-h-[100dvh] items-center justify-center bg-ink px-6">
+    <main className="studio-login">
       <form
-        className="w-full max-w-sm"
-        onSubmit={async e => {
+        className="studio-login-card"
+        onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);
           setError(null);
           const res = await adminLogin(password).catch(() => ({ ok: false }));
           setBusy(false);
-          if (res.ok) router.push("/admin");
-          else setError("Неверный пароль");
+          if (res.ok) {
+            router.push("/admin");
+            router.refresh();
+          } else setError("Не удалось войти. Проверьте пароль и соединение.");
         }}
       >
-        <div className="mb-8 text-center">
-          <Brand />
-          <p className="mt-3 text-[15px] text-muted">Студия авторов</p>
+        <div className="studio-brand">
+          <span className="studio-brand-mark">
+            <Icon name="moon" size={24} />
+          </span>
+          <span>
+            <strong>Полночь</strong>
+            <small>СТУДИЯ ИСТОРИЙ</small>
+          </span>
         </div>
-        <input
-          type="password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          placeholder="Пароль администратора"
-          autoFocus
-          className="w-full rounded-2xl bg-raised px-4 py-3.5 text-fg ring-1 ring-white/10 placeholder:text-faint focus:outline-none focus:ring-accent"
-        />
-        {error && <p className="mt-2 text-[14px] text-danger">{error}</p>}
-        <button className="btn-primary mt-4 w-full" disabled={busy || !password}>
-          {busy ? "Проверяем…" : "Войти"}
+        <h1>За каждой историей — вы</h1>
+        <p>
+          Войдите, чтобы продолжить работу
+          <br />
+          над своими историями.
+        </p>
+        <label htmlFor="studio-password">Пароль студии</label>
+        <div className="studio-password">
+          <input
+            id="studio-password"
+            type={visible ? "text" : "password"}
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Введите пароль"
+            disabled={busy}
+          />
+          <button
+            type="button"
+            aria-pressed={visible}
+            onClick={() => setVisible((v) => !v)}
+          >
+            {visible ? "Скрыть" : "Показать"}
+          </button>
+        </div>
+        {error && (
+          <p role="alert" className="studio-error mt-3">
+            {error}
+          </p>
+        )}
+        <button
+          type="submit"
+          className="studio-button"
+          disabled={busy || !password}
+        >
+          {busy ? "Проверяем…" : "Войти в студию"}
+          <Icon name="forward" size={17} />
         </button>
-        <p className="mt-6 text-center text-[13px] leading-relaxed text-faint">
-          Администраторы из Telegram (ADMIN_TELEGRAM_IDS) входят автоматически, открыв приложение через бота.
+        <p className="studio-login-hint">
+          Если ваш Telegram-профиль имеет доступ к студии, откройте её из
+          профиля в приложении.
         </p>
       </form>
     </main>

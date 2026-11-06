@@ -21,6 +21,26 @@ export async function getAllStories(): Promise<Story[]> {
   return (data || []) as Story[];
 }
 
+export type StudioStory = Story & {
+  chapters: number;
+  publishedChapters: number;
+  nextDraft: { id: string; title: string; number: number } | null;
+};
+
+/** Catalog summary without loading chapter scripts or scene content. */
+export async function getStudioCatalog(): Promise<StudioStory[]> {
+  const stories = await getAllStories(); // Includes the admin authorization check.
+  const supabase = await db();
+  const { data, error } = await supabase.from("days").select("id, story_id, day_number, title, status").order("day_number", { ascending: true });
+  if (error) throw new Error(error.message);
+  const days = (data || []) as Pick<Day, "id" | "story_id" | "day_number" | "title" | "status">[];
+  return stories.map(story => {
+    const chapters = days.filter(day => day.story_id === story.id);
+    const draft = chapters.find(day => day.status === "draft");
+    return { ...story, chapters: chapters.length, publishedChapters: chapters.filter(day => day.status === "published").length, nextDraft: draft ? { id: draft.id, title: draft.title, number: draft.day_number } : null };
+  });
+}
+
 export async function getStory(storyId: string): Promise<Story | null> {
   await requireAdmin();
   assertId(storyId);

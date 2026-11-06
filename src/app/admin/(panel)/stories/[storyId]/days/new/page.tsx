@@ -1,122 +1,106 @@
 "use client";
-
-import { useState, use } from "react";
-import { useRouter } from "next/navigation";
+import { use, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createDay, getStoryDays } from "@/lib/actions/admin";
-
-interface PageProps {
+import { StudioBack, StudioHeading } from "@/components/admin/StudioUI";
+import { useUnsavedChanges } from "@/components/admin/useUnsavedChanges";
+export default function NewDayPage({
+  params,
+}: {
   params: Promise<{ storyId: string }>;
-}
-
-export default function NewDayPage({ params }: PageProps) {
+}) {
   const { storyId } = use(params);
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-
-    const formData = new FormData(e.currentTarget);
-    
-    try {
-      // Get next day number
-      const days = await getStoryDays(storyId);
-      const nextDayNumber = days.length > 0 
-        ? Math.max(...days.map(d => d.day_number)) + 1 
-        : 1;
-
-      const day = await createDay({
-        story_id: storyId,
-        day_number: nextDayNumber,
-        title: formData.get("title") as string,
-        unlock_at: formData.get("unlock_at") as string || undefined,
-        estimated_minutes: parseInt(formData.get("estimated_minutes") as string) || undefined,
-      });
-      
-      router.push(`/admin/days/${day.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Произошла ошибка");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  const [dirty, setDirty] = useState(false);
+  useUnsavedChanges(dirty);
   return (
-    <div className="px-4 py-6">
-      <div className="flex items-center gap-2 text-sm text-tg-text-secondary mb-4">
-        <Link href={`/admin/stories/${storyId}`} className="hover:text-tg-accent">
-          ← Назад к истории
-        </Link>
-      </div>
-
-      <h2 className="text-xl font-bold text-tg-text mb-6">Новый день</h2>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-tg-text-secondary mb-2">
-            Название дня *
+    <div className="studio-page">
+      <StudioBack href={`/admin/stories/${storyId}`}>К истории</StudioBack>
+      <StudioHeading
+        eyebrow="Следующее сообщение"
+        title="Новая глава"
+        description="Номер назначится автоматически. После создания откроется редактор сценария."
+      />
+      <form
+        className="studio-panel"
+        onChange={() => setDirty(true)}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError(null);
+          const form = new FormData(e.currentTarget);
+          try {
+            const days = await getStoryDays(storyId);
+            const next = days.length
+              ? Math.max(...days.map((day) => day.day_number)) + 1
+              : 1;
+            const unlock = String(form.get("unlock_at") || "");
+            const day = await createDay({
+              story_id: storyId,
+              day_number: next,
+              title: String(form.get("title")),
+              unlock_at: unlock
+                ? new Date(`${unlock}Z`).toISOString()
+                : undefined,
+              estimated_minutes:
+                Number(form.get("estimated_minutes")) || undefined,
+            });
+            setDirty(false);
+            router.push(`/admin/days/${day.id}`);
+          } catch (e) {
+            setError(
+              e instanceof Error ? e.message : "Не удалось создать главу",
+            );
+            setBusy(false);
+          }
+        }}
+      >
+        <fieldset disabled={busy} className="studio-form-grid">
+          <label className="studio-field wide">
+            Название главы
+            <input
+              name="title"
+              required
+              placeholder="Например: Незнакомый номер"
+            />
           </label>
-          <input
-            type="text"
-            name="title"
-            required
-            className="w-full bg-tg-bg-secondary border border-tg-border rounded-xl px-4 py-3 text-tg-text placeholder-tg-text-hint focus:outline-none focus:border-tg-accent"
-            placeholder="Например: Знакомство"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-tg-text-secondary mb-2">
-            Дата разблокировки
+          <label className="studio-field">
+            Время чтения · минуты
+            <input
+              type="number"
+              name="estimated_minutes"
+              min={1}
+              max={60}
+              defaultValue={25}
+              required
+            />
           </label>
-          <input
-            type="datetime-local"
-            name="unlock_at"
-            className="w-full bg-tg-bg-secondary border border-tg-border rounded-xl px-4 py-3 text-tg-text focus:outline-none focus:border-tg-accent"
-          />
-          <p className="text-xs text-tg-text-hint mt-1">
-            Оставьте пустым, если день доступен сразу
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-tg-text-secondary mb-2">
-            Примерное время прохождения (мин)
+          <label className="studio-field">
+            Дата открытия · UTC
+            <input type="datetime-local" name="unlock_at" />
+            <small>
+              Необязательно. Без даты глава открывается по обычным правилам
+              истории.
+            </small>
           </label>
-          <input
-            type="number"
-            name="estimated_minutes"
-            min="1"
-            max="60"
-            defaultValue="25"
-            className="w-full bg-tg-bg-secondary border border-tg-border rounded-xl px-4 py-3 text-tg-text focus:outline-none focus:border-tg-accent"
-          />
-        </div>
-
+        </fieldset>
         {error && (
-          <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-400 text-sm">
+          <p role="alert" className="studio-error mt-4">
             {error}
-          </div>
+          </p>
         )}
-
-        <div className="flex gap-3 pt-4">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="flex-1 py-3 bg-tg-bg-secondary text-tg-text rounded-xl font-medium"
+        <div className="studio-form-actions">
+          <Link
+            className="studio-button secondary"
+            href={`/admin/stories/${storyId}`}
           >
             Отмена
-          </button>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="flex-1 py-3 bg-tg-accent text-white rounded-xl font-medium disabled:opacity-50"
-          >
-            {isLoading ? "Создание..." : "Создать"}
+          </Link>
+          <button type="submit" className="studio-button" disabled={busy}>
+            {busy ? "Создаём…" : "Создать главу"}
           </button>
         </div>
       </form>

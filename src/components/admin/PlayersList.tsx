@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listPlayers, setFreeAccess, type PlayerFilter, type PlayerList } from "@/lib/actions/players";
+import {
+  listPlayers,
+  setFreeAccess,
+  type PlayerFilter,
+  type PlayerList,
+} from "@/lib/actions/players";
+import { StudioHeading } from "./StudioUI";
 import { FreeModeToggle } from "./FreeModeToggle";
 
 const FILTERS: Array<{ id: PlayerFilter; label: string }> = [
@@ -24,7 +30,11 @@ export function timeAgo(iso: string | null): string {
   if (h < 24) return `${h} ч назад`;
   const d = Math.round(h / 24);
   if (d < 30) return `${d} дн назад`;
-  return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export function PlayersList() {
@@ -40,10 +50,12 @@ export function PlayersList() {
     const id = ++reqId.current;
     setError(null);
     listPlayers({ q, filter, limit })
-      .then(r => {
+      .then((r) => {
         if (id === reqId.current) setData(r);
       })
-      .catch(e => setError(e instanceof Error ? e.message : "Ошибка загрузки"));
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : "Ошибка загрузки"),
+      );
   }, [q, filter, limit]);
 
   useEffect(() => {
@@ -64,11 +76,16 @@ export function PlayersList() {
   };
 
   return (
-    <div className="px-4 py-6">
-      <h2 className="mb-1 text-xl font-bold text-tg-text">Игроки</h2>
+    <div className="studio-page">
+      <StudioHeading
+        eyebrow="Аудитория"
+        title="Ваши читатели"
+        description="Прогресс, покупки и персональный доступ к историям."
+      />
       {data && (
         <p className="mb-4 text-sm text-tg-text-hint">
-          {data.totals.players} игроков · {data.totals.free} с бесплатным доступом · {data.totals.buyers} покупателей
+          {data.totals.players} игроков · {data.totals.free} с бесплатным
+          доступом · {data.totals.buyers} покупателей
           {data.totals.guests ? ` · ${data.totals.guests} гостей` : ""}
         </p>
       )}
@@ -76,22 +93,27 @@ export function PlayersList() {
         <FreeModeToggle onChange={() => load()} />
       </div>
       {data?.globalFree && (
-        <p className="mb-4 text-xs text-tg-text-hint">Пока бесплатно всем, отметка «бесплатно» у отдельного игрока ни на что не влияет. Она заработает, когда вы вернёте оплату.</p>
+        <p className="mb-4 text-xs text-tg-text-hint">
+          Пока бесплатно всем, отметка «бесплатно» у отдельного игрока ни на что
+          не влияет. Она заработает, когда вы вернёте оплату.
+        </p>
       )}
 
       <input
         value={q}
-        onChange={e => {
+        onChange={(e) => {
           setQ(e.target.value);
           setLimit(50);
         }}
+        aria-label="Найти игрока"
         placeholder="Имя, @username или Telegram ID"
         className="mb-3 w-full rounded-xl border border-tg-border bg-tg-bg-secondary px-4 py-3 text-tg-text outline-none focus:border-tg-accent"
       />
       <div className="no-scrollbar mb-4 flex gap-2 overflow-x-auto">
-        {FILTERS.map(f => (
+        {FILTERS.map((f) => (
           <button
             key={f.id}
+            aria-pressed={filter === f.id}
             onClick={() => {
               setFilter(f.id);
               setLimit(50);
@@ -107,30 +129,57 @@ export function PlayersList() {
       {!data ? (
         <p className="text-sm text-tg-text-hint">Загрузка…</p>
       ) : data.rows.length === 0 ? (
-        <p className="rounded-xl bg-tg-bg-secondary p-6 text-center text-sm text-tg-text-hint">Никого не нашли</p>
+        <p className="rounded-xl bg-tg-bg-secondary p-6 text-center text-sm text-tg-text-hint">
+          Никого не нашли
+        </p>
       ) : (
         <div className="space-y-2">
-          {data.rows.map(r => (
-            <div key={r.id} className="flex items-center gap-3 rounded-xl border border-tg-border bg-tg-bg-secondary p-3">
-              <Link href={`/admin/players/${r.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+          {data.rows.map((r) => (
+            <div
+              key={r.id}
+              className="studio-player-row flex items-center gap-3 rounded-xl border border-tg-border bg-tg-bg-secondary p-3"
+            >
+              <Link
+                href={`/admin/players/${r.id}`}
+                className="flex min-w-0 flex-1 items-center gap-3"
+              >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-tg-accent/20 text-sm font-semibold text-tg-accent">
                   {r.photo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.photo_url} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={r.photo_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     (r.name || "?").slice(0, 1).toUpperCase()
                   )}
                 </span>
                 <span className="min-w-0">
-                  <span className="flex items-center gap-1.5">
-                    <span className="truncate font-medium text-tg-text">{r.name || "Без имени"}</span>
-                    {r.free_access && <span className="shrink-0 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] text-green-400">бесплатно</span>}
-                    {r.stars > 0 && <span className="shrink-0 rounded-full bg-yellow-500/15 px-2 py-0.5 text-[11px] text-yellow-300">{r.stars} ⭐</span>}
-                    {r.bot_blocked && <span className="shrink-0 rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] text-red-400">бот заблокирован</span>}
+                  <span className="studio-player-badges flex items-center gap-1.5">
+                    <span className="truncate font-medium text-tg-text">
+                      {r.name || "Без имени"}
+                    </span>
+                    {r.free_access && (
+                      <span className="shrink-0 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] text-green-400">
+                        бесплатно
+                      </span>
+                    )}
+                    {r.stars > 0 && (
+                      <span className="shrink-0 rounded-full bg-yellow-500/15 px-2 py-0.5 text-[11px] text-yellow-300">
+                        {r.stars} ⭐
+                      </span>
+                    )}
+                    {r.bot_blocked && (
+                      <span className="shrink-0 rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] text-red-400">
+                        бот заблокирован
+                      </span>
+                    )}
                   </span>
                   <span className="block truncate text-xs text-tg-text-hint">
                     {r.username ? `@${r.username} · ` : ""}
-                    {r.chapters} гл. · {r.endings} концовок · {timeAgo(r.last_seen_at)}
+                    {r.chapters} гл. · {r.endings} концовок ·{" "}
+                    {timeAgo(r.last_seen_at)}
                   </span>
                 </span>
               </Link>
@@ -146,7 +195,10 @@ export function PlayersList() {
             </div>
           ))}
           {data.hasMore && (
-            <button onClick={() => setLimit(l => l + 50)} className="w-full rounded-xl bg-tg-bg-secondary py-3 text-sm text-tg-accent">
+            <button
+              onClick={() => setLimit((l) => l + 50)}
+              className="w-full rounded-xl bg-tg-bg-secondary py-3 text-sm text-tg-accent"
+            >
               Показать ещё
             </button>
           )}

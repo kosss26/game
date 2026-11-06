@@ -1,58 +1,114 @@
 "use client";
-
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import { adminLogout } from "@/lib/actions/auth";
+import { Icon, type IconName } from "@/components/ui/Icon";
+import { confirmStudioLeave } from "./useUnsavedChanges";
 
-const NAV = [
-  { href: "/admin", label: "Обзор" },
-  { href: "/admin/stories", label: "Истории" },
-  { href: "/admin/players", label: "Игроки" },
-  { href: "/admin/analytics", label: "Аналитика" },
+const NAV: { href: string; label: string; icon: IconName }[] = [
+  { href: "/admin", label: "Обзор", icon: "moon" },
+  { href: "/admin/stories", label: "Истории", icon: "book" },
+  { href: "/admin/players", label: "Игроки", icon: "users" },
+  { href: "/admin/analytics", label: "Аналитика", icon: "bolt" },
 ];
-
 export function AdminNav() {
   const pathname = usePathname();
   const router = useRouter();
-
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const logout = async () => {
+    if (!confirmStudioLeave()) return;
+    setBusy(true);
+    setError(false);
+    try {
+      await adminLogout();
+      router.push("/admin/login");
+      router.refresh();
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <header className="sticky top-0 z-50 border-b border-tg-border bg-tg-bg-secondary/95 backdrop-blur pt-safe">
-      <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-        <div>
-          <h1 className="font-bold text-tg-text">Полночь · Студия</h1>
-          <p className="text-xs text-tg-text-hint">Истории и игроки</p>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <Link href="/" className="text-tg-accent">
-            К приложению
+    <>
+      <a href="#studio-content" className="studio-skip">
+        К содержимому
+      </a>
+      <header className="studio-sidebar">
+        <div className="studio-brand-row">
+          <Link href="/admin" className="studio-brand">
+            <span className="studio-brand-mark">
+              <Icon name="moon" size={23} />
+            </span>
+            <span>
+              <strong>Полночь</strong>
+              <small>СТУДИЯ ИСТОРИЙ</small>
+            </span>
           </Link>
-          <button
-            onClick={async () => {
-              await adminLogout();
-              router.push("/admin/login");
-            }}
-            className="text-tg-text-hint"
-          >
-            Выйти
-          </button>
-        </div>
-      </div>
-      <nav className="mx-auto flex max-w-3xl border-t border-tg-border">
-        {NAV.map(item => {
-          const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
-          return (
+          <div className="studio-mobile-actions">
             <Link
-              key={item.href}
-              href={item.href}
-              className={`flex-1 py-3 text-center text-sm transition-colors ${
-                active ? "border-b-2 border-tg-accent bg-tg-accent/5 text-tg-accent" : "text-tg-text-secondary"
-              }`}
+              href="/"
+              className="studio-mobile-app"
+              aria-label="Открыть приложение"
             >
-              {item.label}
+              <Icon name="forward" size={20} />
             </Link>
-          );
-        })}
-      </nav>
-    </header>
+            <button
+              className="studio-mobile-app"
+              disabled={busy}
+              onClick={logout}
+              aria-label="Выйти из студии"
+            >
+              <Icon name="lock" size={18} />
+            </button>
+          </div>
+        </div>
+        <p className="studio-nav-caption">Рабочее пространство</p>
+        <nav className="studio-navigation" aria-label="Разделы студии">
+          {NAV.map((item) => {
+            const active =
+              item.href === "/admin"
+                ? pathname === "/admin"
+                : pathname.startsWith(item.href) ||
+                  (item.href === "/admin/stories" &&
+                    pathname.startsWith("/admin/days/"));
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={active ? "is-active" : ""}
+              >
+                <Icon name={item.icon} size={20} />
+                <span>{item.label}</span>
+                {active && <i />}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="studio-sidebar-bottom">
+          <p>
+            Слова становятся
+            <br />
+            историями.
+          </p>
+          <Link href="/" className="studio-app-link">
+            <Icon name="play" size={15} />
+            Открыть приложение
+            <Icon name="forward" size={15} />
+          </Link>
+          <button className="studio-logout" disabled={busy} onClick={logout}>
+            {busy ? "Выходим…" : "Выйти из студии"}
+          </button>
+          {error && (
+            <span role="alert" className="studio-error-text">
+              Не удалось выйти. Повторите.
+            </span>
+          )}
+        </div>
+      </header>
+    </>
   );
 }

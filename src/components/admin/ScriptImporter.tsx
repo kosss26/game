@@ -1,133 +1,275 @@
 "use client";
-
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseScript, validateScript } from "@/lib/parser/dsl-parser";
 import { importScript } from "@/lib/actions/admin";
 import type { Character, ChatConfig, Day } from "@/lib/types/database";
+import { Icon } from "@/components/ui/Icon";
+import { useUnsavedChanges } from "./useUnsavedChanges";
 
-interface ScriptImporterProps {
+const CHEATSHEET = `@title Название главы
+@minutes 12
+@wait 12h
+@recap Цитата в конце
+@teaser Тизер следующей главы
+@push Текст уведомления
+@char asya Ася | color=#e17076
+
+asya: Реплика персонажа
+ME: Реплика игрока
+SYS: Системное сообщение
+
+[typing 1500ms]
+[delay 500ms]
+[pause 2m Ася не в сети]
+
+:: метка
+-> метка
+IF trust >= 2 -> метка
+SET trust += 1, met = true
+
+CHOICE: Как ответить?
+- Ответ -> метка [set trust += 1]
+- (Действие без сообщения)
+
+INPUT name: Как тебя зовут?
+asya: Привет, {name}!
+END
+END концовка`;
+
+interface Props {
   day: Day;
   existingScenesCount: number;
   storyCharacters?: Record<string, Character>;
   storyChats?: Record<string, ChatConfig>;
+  onDirtyChange?: (dirty: boolean) => void;
 }
-
-const CHEATSHEET = `@title Название дня     @minutes 12     @wait 12h
-@recap Цитата в конце   @teaser Тизер след. дня   @push Текст уведомления
-@char asya Ася | color=#e17076 | status=в сети
-
-asya: реплика персонажа     ME: реплика игрока     SYS: системное
-...   [typing 1500ms]   [delay 500ms]   [pause 2m Ася не в сети]
-
-:: метка          -> метка          END  |  END концовка
-IF trust >= 2 -> метка              SET trust += 1, met = true
-[if trust >= 2] asya: условная реплика
-CHOICE: Подсказка
-- Ответ -> метка [set trust += 1] [if флаг]
-- (Действие без сообщения)
-INPUT name: Как тебя зовут?          {name} — подстановка`;
-
-export function ScriptImporter({ day, existingScenesCount, storyCharacters = {}, storyChats = {} }: ScriptImporterProps) {
+export function ScriptImporter({
+  day,
+  existingScenesCount,
+  storyCharacters = {},
+  storyChats = {},
+  onDirtyChange,
+}: Props) {
   const router = useRouter();
+  const editor = useRef<HTMLTextAreaElement>(null);
   const [script, setScript] = useState(day.meta?.script || "");
+  const [savedScript, setSavedScript] = useState(day.meta?.script || "");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const [serverErrors, setServerErrors] = useState<Array<{ line: number; message: string }>>([]);
-  const [showHelp, setShowHelp] = useState(!day.meta?.script);
-
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(
+    null,
+  );
+  const [serverErrors, setServerErrors] = useState<
+    Array<{ line: number; message: string }>
+  >([]);
+  const dirty = script !== savedScript;
+  useUnsavedChanges(dirty);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
   const parsed = useMemo(() => {
-    const r = parseScript(script, { characters: storyCharacters, chats: storyChats });
+    const r = parseScript(script, {
+      characters: storyCharacters,
+      chats: storyChats,
+    });
     r.errors = [...r.errors, ...(script.trim() ? validateScript(r) : [])];
     return r;
   }, [script, storyCharacters, storyChats]);
-
-  const dirty = script !== (day.meta?.script || "");
   const stats = {
-    messages: parsed.scenes.filter(s => s.type === "message" || s.type === "system").length,
-    choices: parsed.scenes.filter(s => s.type === "choice").length,
-    labels: parsed.scenes.filter(s => s.tag).length,
+    messages: parsed.scenes.filter(
+      (s) => s.type === "message" || s.type === "system",
+    ).length,
+    choices: parsed.scenes.filter((s) => s.type === "choice").length,
+    labels: parsed.scenes.filter((s) => s.tag).length,
     words: script.split(/\s+/).filter(Boolean).length,
   };
-
+  const canSave =
+    !saving &&
+    !parsed.errors.length &&
+    !!script.trim() &&
+    (dirty || !existingScenesCount);
   const save = async () => {
-    if (existingScenesCount > 0 && day.status === "published" && !confirm("Сцены черновика будут заменены. Опубликованная версия не изменится, пока вы не опубликуете заново. Продолжить?")) {
+    if (!canSave) return;
+    if (
+      existingScenesCount > 0 &&
+      day.status === "published" &&
+      !confirm(
+        "Сцены черновика будут заменены. Опубликованная версия не изменится до повторной публикации. Продолжить?",
+      )
+    )
       return;
-    }
     setSaving(true);
     setMessage(null);
     setServerErrors([]);
-    const res = await importScript(day.id, script).catch(e => ({ ok: false, error: String(e?.message || e) }) as Awaited<ReturnType<typeof importScript>>);
+    const res = await importScript(day.id, script).catch(
+      (e) =>
+        ({ ok: false, error: String(e?.message || e) }) as Awaited<
+          ReturnType<typeof importScript>
+        >,
+    );
     setSaving(false);
     if (res.ok) {
-      setMessage({ ok: true, text: `Сохранено: ${res.scenes} сцен, ${res.choices} вариантов выбора. Не забудьте опубликовать.` });
+      setSavedScript(script);
+      setMessage({
+        ok: true,
+        text: `Черновик сохранён: ${res.scenes} сцен, ${res.choices} вариантов выбора. Для игроков изменения появятся после публикации.`,
+      });
       router.refresh();
     } else {
       setServerErrors(res.errors || []);
-      setMessage({ ok: false, text: res.error || "В скрипте есть ошибки" });
+      setMessage({
+        ok: false,
+        text: res.error || "Исправьте ошибки в сценарии",
+      });
     }
   };
-
+  const goToLine = (line: number) => {
+    const textarea = editor.current;
+    if (!textarea || line < 1) return;
+    const lines = script.split("\n");
+    const offset = lines
+      .slice(0, line - 1)
+      .reduce((n, text) => n + text.length + 1, 0);
+    textarea.focus();
+    textarea.setSelectionRange(offset, offset + (lines[line - 1]?.length || 0));
+    textarea.scrollTop = Math.max(
+      0,
+      (line - 1) * parseFloat(getComputedStyle(textarea).lineHeight) -
+        textarea.clientHeight / 3,
+    );
+  };
   const errors = serverErrors.length ? serverErrors : parsed.errors;
-
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-tg-text-secondary">
-          {stats.messages} реплик · {stats.choices} выборов · {stats.labels} меток · ~{Math.round(stats.words / 180)} мин чтения
-        </p>
-        <button onClick={() => setShowHelp(v => !v)} className="text-sm text-tg-accent">
-          {showHelp ? "Скрыть синтаксис" : "Синтаксис"}
-        </button>
+    <div className="studio-script-grid">
+      <div>
+        <div className="studio-script-toolbar">
+          <span>
+            <Icon name="file" size={15} />
+            <label htmlFor={`script-${day.id}`}>Сценарий главы</label>
+          </span>
+          <span>{script.split("\n").length} строк</span>
+        </div>
+        <textarea
+          id={`script-${day.id}`}
+          ref={editor}
+          value={script}
+          disabled={saving}
+          onChange={(e) => {
+            setScript(e.target.value);
+            setMessage(null);
+            setServerErrors([]);
+          }}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+              e.preventDefault();
+              void save();
+            }
+          }}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          placeholder="Напишите первую реплику…"
+          className="studio-script-code"
+        />
+        {errors.length > 0 && (
+          <section
+            className="studio-script-issues"
+            aria-label="Ошибки сценария"
+          >
+            <h3>Нужно исправить · {errors.length}</h3>
+            {errors.slice(0, 20).map((error, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => goToLine(error.line)}
+              >
+                {error.line > 0 && <b>Строка {error.line} · </b>}
+                {error.message}
+              </button>
+            ))}
+          </section>
+        )}
+        {parsed.warnings.length > 0 && (
+          <section className="studio-script-issues is-warning">
+            <h3>Стоит проверить · {parsed.warnings.length}</h3>
+            {parsed.warnings.slice(0, 10).map((warning, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => goToLine(warning.line)}
+              >
+                Строка {warning.line} · {warning.message}
+              </button>
+            ))}
+          </section>
+        )}
+        {message && (
+          <p
+            role={message.ok ? "status" : "alert"}
+            className={`mt-4 ${message.ok ? "studio-success" : "studio-error"}`}
+          >
+            {message.text}
+          </p>
+        )}
+        <div className="studio-script-footer">
+          <p
+            className={`studio-save-state ${dirty ? "is-dirty" : ""}`}
+            role="status"
+          >
+            {saving
+              ? "Сохраняем черновик…"
+              : dirty
+                ? "● Есть несохранённые изменения"
+                : !script.trim() && !existingScenesCount
+                  ? "Сценарий пока пуст"
+                  : "✓ Черновик сохранён"}
+            <br />
+            <span>⌘ / Ctrl + S — сохранить</span>
+          </p>
+          <button
+            type="button"
+            className="studio-button"
+            disabled={!canSave}
+            onClick={() => void save()}
+          >
+            {saving
+              ? "Сохраняем…"
+              : dirty || !existingScenesCount
+                ? "Сохранить сценарий"
+                : "Сохранено"}
+          </button>
+        </div>
       </div>
-
-      {showHelp && <pre className="overflow-x-auto rounded-xl bg-tg-bg-secondary p-3 text-[11.5px] leading-relaxed text-tg-text-secondary">{CHEATSHEET}</pre>}
-
-      <textarea
-        value={script}
-        onChange={e => setScript(e.target.value)}
-        rows={26}
-        spellCheck={false}
-        placeholder="Вставьте или напишите скрипт дня…"
-        className="w-full resize-y rounded-xl border border-tg-border bg-tg-bg-secondary px-4 py-3 font-mono text-[13px] leading-relaxed text-tg-text placeholder-tg-text-hint focus:border-tg-accent focus:outline-none"
-      />
-
-      {errors.length > 0 && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3">
-          <p className="mb-2 text-sm font-medium text-red-400">Ошибки ({errors.length})</p>
-          <ul className="space-y-1 text-sm text-red-300/90">
-            {errors.slice(0, 20).map((e, i) => (
-              <li key={i}>
-                {e.line > 0 && <span className="font-mono text-red-400">строка {e.line}: </span>}
-                {e.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {parsed.warnings.length > 0 && (
-        <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3">
-          <p className="mb-2 text-sm font-medium text-yellow-400">Предупреждения ({parsed.warnings.length})</p>
-          <ul className="space-y-1 text-sm text-yellow-300/90">
-            {parsed.warnings.slice(0, 10).map((w, i) => (
-              <li key={i}>
-                <span className="font-mono">строка {w.line}: </span>
-                {w.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {message && <p className={`text-sm ${message.ok ? "text-green-400" : "text-red-400"}`}>{message.text}</p>}
-
-      <button
-        onClick={save}
-        disabled={saving || parsed.errors.length > 0 || !script.trim() || (!dirty && existingScenesCount > 0)}
-        className="w-full rounded-xl bg-tg-accent py-3.5 font-medium text-white disabled:opacity-40"
-      >
-        {saving ? "Сохраняем…" : dirty || existingScenesCount === 0 ? "Сохранить скрипт" : "Сохранено"}
-      </button>
+      <aside className="studio-script-aside">
+        <section>
+          <h3>В этой главе</h3>
+          <dl>
+            <dt>Реплики</dt>
+            <dd>{stats.messages}</dd>
+            <dt>Выборы</dt>
+            <dd>{stats.choices}</dd>
+            <dt>Метки</dt>
+            <dd>{stats.labels}</dd>
+            <dt>Чтение</dt>
+            <dd>~{Math.max(1, Math.round(stats.words / 180))} мин</dd>
+          </dl>
+        </section>
+        <section>
+          <h3>Пишите. Проверяйте. Публикуйте.</h3>
+          <p>
+            Сохраните сценарий, затем откройте «Тест» и «Проверка». Публикация —
+            отдельный шаг.
+          </p>
+          <p>
+            Переключение вкладок сохраняет текст в редакторе. Перед уходом
+            сохраните изменения.
+          </p>
+        </section>
+        <details>
+          <summary>Справочник синтаксиса</summary>
+          <pre>{CHEATSHEET}</pre>
+        </details>
+      </aside>
     </div>
   );
 }

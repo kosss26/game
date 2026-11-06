@@ -1,118 +1,138 @@
 import Link from "next/link";
-import { getAllStories } from "@/lib/actions/admin";
+import { getStudioCatalog } from "@/lib/actions/admin";
 import { FreeModeToggle } from "@/components/admin/FreeModeToggle";
-
+import {
+  StudioHeading,
+  StudioStat,
+  StudioStatus,
+  StudioEmpty,
+} from "@/components/admin/StudioUI";
+import { CoverArt } from "@/components/ui/CoverArt";
+import { Icon } from "@/components/ui/Icon";
 export default async function AdminDashboard() {
-  const stories = await getAllStories();
-  
-  // Get stats
-  const totalStories = stories.length;
-  const publishedStories = stories.filter(s => s.status === "published").length;
-  const draftStories = stories.filter(s => s.status === "draft").length;
-
-  return (
-    <div className="px-4 py-6">
-      <h2 className="text-xl font-bold text-tg-text mb-6">Обзор</h2>
-      
-      {/* Stats cards */}
-      <div className="grid grid-cols-3 gap-3 mb-8">
-        <StatCard label="Всего историй" value={totalStories} />
-        <StatCard label="Опубликовано" value={publishedStories} color="green" />
-        <StatCard label="Черновики" value={draftStories} color="yellow" />
-      </div>
-
-      {/* Бесплатный режим */}
-      <div className="mb-8">
-        <FreeModeToggle />
-      </div>
-
-      {/* Quick actions */}
-      <div className="mb-8">
-        <h3 className="text-sm font-medium text-tg-text-secondary uppercase tracking-wide mb-3">
-          Быстрые действия
-        </h3>
-        <div className="grid grid-cols-2 gap-3">
-          <Link
-            href="/admin/stories/new"
-            className="flex items-center gap-3 p-4 bg-tg-bg-secondary rounded-xl border border-tg-border hover:border-tg-accent transition-colors"
-          >
-            <span className="text-2xl">➕</span>
-            <div>
-              <p className="font-medium text-tg-text">Новая история</p>
-              <p className="text-xs text-tg-text-hint">Создать историю</p>
-            </div>
-          </Link>
-          <Link
-            href="/admin/stories"
-            className="flex items-center gap-3 p-4 bg-tg-bg-secondary rounded-xl border border-tg-border hover:border-tg-accent transition-colors"
-          >
-            <span className="text-2xl">📝</span>
-            <div>
-              <p className="font-medium text-tg-text">Редактировать</p>
-              <p className="text-xs text-tg-text-hint">Все истории</p>
-            </div>
-          </Link>
-        </div>
-      </div>
-
-      {/* Recent stories */}
-      <div>
-        <h3 className="text-sm font-medium text-tg-text-secondary uppercase tracking-wide mb-3">
-          Последние истории
-        </h3>
-        <div className="space-y-2">
-          {stories.slice(0, 5).map((story) => (
-            <Link
-              key={story.id}
-              href={`/admin/stories/${story.id}`}
-              className="flex items-center justify-between p-4 bg-tg-bg-secondary rounded-xl"
-            >
-              <div>
-                <p className="font-medium text-tg-text">{story.title}</p>
-                <p className="text-xs text-tg-text-hint">
-                  {new Date(story.created_at).toLocaleDateString("ru-RU")}
-                </p>
-              </div>
-              <span className={`text-xs px-2 py-1 rounded-full ${
-                story.status === "published" 
-                  ? "bg-green-500/20 text-green-400"
-                  : "bg-yellow-500/20 text-yellow-400"
-              }`}>
-                {story.status === "published" ? "Опубликовано" : "Черновик"}
-              </span>
-            </Link>
-          ))}
-          
-          {stories.length === 0 && (
-            <div className="text-center py-8 text-tg-text-hint">
-              Историй пока нет. Создайте первую!
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+  const stories = await getStudioCatalog();
+  const recent = [...stories].sort((a, b) =>
+    b.updated_at.localeCompare(a.updated_at),
   );
-}
-
-function StatCard({ 
-  label, 
-  value, 
-  color = "blue" 
-}: { 
-  label: string; 
-  value: number; 
-  color?: "blue" | "green" | "yellow";
-}) {
-  const colorClasses = {
-    blue: "text-tg-accent",
-    green: "text-green-400",
-    yellow: "text-yellow-400",
-  };
-
+  const draft = recent.find((story) => story.nextDraft);
   return (
-    <div className="bg-tg-bg-secondary rounded-xl p-4 text-center">
-      <p className={`text-2xl font-bold ${colorClasses[color]}`}>{value}</p>
-      <p className="text-xs text-tg-text-hint mt-1">{label}</p>
+    <div className="studio-page">
+      <StudioHeading
+        eyebrow="Авторская студия"
+        title="Хорошее время для истории"
+        description="Создавайте миры, в которые хочется вернуться."
+        action={
+          <Link className="studio-button" href="/admin/stories/new">
+            <span aria-hidden="true">＋</span>Новая история
+          </Link>
+        }
+      />
+      <div className="studio-stats">
+        <StudioStat label="Историй в студии" value={stories.length} />
+        <StudioStat
+          label="В приложении"
+          value={stories.filter((s) => s.status === "published").length}
+        />
+        <StudioStat
+          label="Глав опубликовано"
+          value={stories.reduce((sum, s) => sum + s.publishedChapters, 0)}
+        />
+        <StudioStat
+          label="Глав в работе"
+          value={stories.reduce(
+            (sum, s) => sum + s.chapters - s.publishedChapters,
+            0,
+          )}
+        />
+      </div>
+      <div className="studio-dashboard-grid">
+        <section className="studio-section">
+          <div className="studio-section-heading">
+            <h2>Продолжить работу</h2>
+            <Link href="/admin/stories">
+              Все истории
+              <Icon name="chevron" size={15} />
+            </Link>
+          </div>
+          {recent.length ? (
+            <div className="studio-recent-list">
+              {recent.slice(0, 5).map((story) => (
+                <Link
+                  className="studio-recent-row"
+                  key={story.id}
+                  href={`/admin/stories/${story.id}`}
+                >
+                  <div className="studio-recent-cover">
+                    <CoverArt style={story.cover_style || "noir"} thumbnail />
+                  </div>
+                  <div className="studio-recent-copy">
+                    <h3>{story.title}</h3>
+                    <p>
+                      {story.chapters} гл. · {story.publishedChapters}{" "}
+                      опубликовано
+                    </p>
+                  </div>
+                  <StudioStatus published={story.status === "published"} />
+                  <Icon
+                    className="studio-row-chevron"
+                    name="chevron"
+                    size={18}
+                  />
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <StudioEmpty
+              title="Первая история впереди"
+              text="Начните с названия. Главы можно добавить позже."
+            />
+          )}
+        </section>
+        <aside className="studio-dashboard-aside">
+          <section className="studio-focus-card">
+            <span className="studio-focus-icon">
+              <Icon name={draft ? "file" : "check"} size={22} />
+            </span>
+            <p className="studio-eyebrow">
+              {draft ? "На очереди" : "Всё на своих местах"}
+            </p>
+            <h2>{draft ? draft.title : "Можно начать что-то новое"}</h2>
+            <p>
+              {draft
+                ? `Глава ${draft.nextDraft!.number} · ${draft.nextDraft!.title}`
+                : "Главы в работе появятся здесь. Пока можно придумать следующую историю."}
+            </p>
+            <Link
+              className="studio-button secondary"
+              href={
+                draft
+                  ? `/admin/days/${draft.nextDraft!.id}`
+                  : "/admin/stories/new"
+              }
+            >
+              {draft ? "Открыть черновик" : "Создать историю"}
+              <Icon name="forward" size={16} />
+            </Link>
+          </section>
+          <FreeModeToggle />
+        </aside>
+      </div>
+      <section className="studio-workflow">
+        <span className="studio-eyebrow">От идеи к читателю</span>
+        <div>
+          <span>
+            <b>01</b>Напишите главу
+          </span>
+          <i />
+          <span>
+            <b>02</b>Пройдите в плеере
+          </span>
+          <i />
+          <span>
+            <b>03</b>Опубликуйте
+          </span>
+        </div>
+      </section>
     </div>
   );
 }

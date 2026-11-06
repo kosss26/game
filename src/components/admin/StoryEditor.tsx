@@ -1,242 +1,362 @@
 "use client";
-
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateStory, deleteStory, publishStory } from "@/lib/actions/admin";
 import type { Story, StoryMeta } from "@/lib/types/database";
+import { CoverArt } from "@/components/ui/CoverArt";
+import { Icon } from "@/components/ui/Icon";
+import { StudioStatus } from "./StudioUI";
+import { useUnsavedChanges } from "./useUnsavedChanges";
 
-interface StoryEditorProps {
-  story: Story;
-}
+const COVERS = [
+  { id: "forest", label: "Лес / санаторий" },
+  { id: "winter", label: "Зимнее озеро" },
+  { id: "aurora", label: "Северное сияние" },
+  { id: "perseids", label: "Звездопад над башней" },
+  { id: "radio", label: "Ночной эфир" },
+  { id: "noir", label: "Нуар" },
+  { id: "romance", label: "Романтика" },
+  { id: "thriller", label: "Триллер" },
+  { id: "mystery", label: "Мистика" },
+];
+const formFor = (story: Story) => ({
+  title: story.title,
+  description: story.description || "",
+  cover_style: story.cover_style || "noir",
+  meta: JSON.stringify(story.meta || {}, null, 2),
+  sort_order: story.sort_order ?? 0,
+});
 
-export function StoryEditor({ story }: StoryEditorProps) {
+export function StoryEditor({ story }: { story: Story }) {
   const router = useRouter();
-  const [isEditing, setIsEditing] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    title: story.title,
-    description: story.description || "",
-    cover_style: story.cover_style || "noir",
-    meta: JSON.stringify(story.meta || {}, null, 2),
-    sort_order: story.sort_order ?? 0,
-  });
-
-  const handleSave = async () => {
-    let meta: StoryMeta;
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [form, setForm] = useState(() => formFor(story));
+  const dirty =
+    editing && JSON.stringify(form) !== JSON.stringify(formFor(story));
+  useUnsavedChanges(dirty);
+  const parsedMeta = useMemo<StoryMeta | null>(() => {
     try {
-      meta = JSON.parse(formData.meta || "{}");
+      const value = JSON.parse(form.meta);
+      return value && typeof value === "object" && !Array.isArray(value)
+        ? value
+        : null;
     } catch {
-      alert("Метаданные: некорректный JSON");
+      return null;
+    }
+  }, [form.meta]);
+  const patchMeta = (
+    key: "tagline" | "genre" | "age_rating" | "synopsis",
+    value: string,
+  ) => {
+    if (!parsedMeta) return;
+    const meta = { ...parsedMeta };
+    if (value) meta[key] = value;
+    else delete meta[key];
+    setForm({ ...form, meta: JSON.stringify(meta, null, 2) });
+  };
+  const run = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await action();
+      router.refresh();
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Не удалось сохранить изменения",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const save = async () => {
+    if (!parsedMeta) {
+      setError(
+        "В дополнительных настройках указан некорректный JSON. Нужен объект в фигурных скобках.",
+      );
       return;
     }
-    setIsLoading(true);
-    try {
-      await updateStory(story.id, {
-        title: formData.title,
-        description: formData.description || null,
-        cover_style: formData.cover_style,
-        sort_order: Number(formData.sort_order) || 0,
-        meta,
+    if (!form.title.trim()) {
+      setError("Укажите название истории.");
+      return;
+    }
+    await run(async () => {
+      const updated = await updateStory(story.id, {
+        title: form.title,
+        description: form.description || null,
+        cover_style: form.cover_style,
+        sort_order: Number(form.sort_order) || 0,
+        meta: parsedMeta,
       });
-      setIsEditing(false);
-      router.refresh();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Ошибка сохранения");
-    } finally {
-      setIsLoading(false);
-    }
+      setForm(formFor(updated));
+      setEditing(false);
+      setSaved(true);
+    });
   };
-
-  const handleDelete = async () => {
-    if (!confirm("Удалить историю? Это действие необратимо.")) return;
-    
-    setIsLoading(true);
-    try {
-      await deleteStory(story.id);
-      router.push("/admin/stories");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Ошибка удаления");
-    } finally {
-      setIsLoading(false);
-    }
+  const changePublication = () => {
+    const published = story.status === "published";
+    if (
+      !confirm(
+        published
+          ? "Снять историю с публикации? Она исчезнет из каталога игроков."
+          : "Опубликовать историю? Игроки увидят её опубликованные главы.",
+      )
+    )
+      return;
+    void run(() =>
+      published
+        ? updateStory(story.id, { status: "draft" })
+        : publishStory(story.id),
+    );
   };
-
-  const handleUnpublish = async () => {
-    if (!confirm("Снять историю с публикации? Игроки перестанут её видеть.")) return;
-    setIsLoading(true);
-    try {
-      await updateStory(story.id, { status: "draft" });
-      router.refresh();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handlePublish = async () => {
-    if (!confirm("Опубликовать историю? Игроки увидят все опубликованные дни.")) return;
-    
-    setIsLoading(true);
-    try {
-      await publishStory(story.id);
-      router.refresh();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Ошибка публикации");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  if (!isEditing) {
-    return (
-      <div className="bg-tg-bg-secondary rounded-xl p-4 border border-tg-border">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-tg-text">{story.title}</h2>
-            {story.description && (
-              <p className="text-tg-text-secondary mt-1">{story.description}</p>
-            )}
-            <div className="flex items-center gap-3 mt-3">
-              <span className={`text-xs px-2 py-1 rounded-full ${
-                story.status === "published" 
-                  ? "bg-green-500/20 text-green-400"
-                  : "bg-yellow-500/20 text-yellow-400"
-              }`}>
-                {story.status === "published" ? "Опубликовано" : "Черновик"}
-              </span>
-              <span className="text-xs text-tg-text-hint">
-                Стиль: {story.cover_style}
-              </span>
-              <a href={`/story/${story.id}`} target="_blank" className="text-xs text-tg-accent">
-                Открыть как игрок ↗
-              </a>
+  return (
+    <section className="studio-panel">
+      {!editing ? (
+        <>
+          <div className="studio-story-summary">
+            <div className="studio-summary-cover">
+              <CoverArt style={story.cover_style || "noir"} />
+            </div>
+            <div>
+              <StudioStatus published={story.status === "published"} />
+              <h1>{story.title}</h1>
+              <p className="studio-summary-description">
+                {story.meta?.tagline ||
+                  story.description ||
+                  "Добавьте описание, чтобы познакомить читателя с историей."}
+              </p>
+              <div className="studio-summary-actions">
+                <button
+                  className="studio-button"
+                  onClick={() => {
+                    setForm(formFor(story));
+                    setEditing(true);
+                    setError(null);
+                    setSaved(false);
+                  }}
+                >
+                  <Icon name="file" size={16} />
+                  Изменить историю
+                </button>
+                <a
+                  className="studio-button secondary"
+                  href={`/story/${story.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Как видит игрок
+                  <Icon name="forward" size={15} />
+                </a>
+              </div>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsEditing(true)}
-              className="px-3 py-1.5 text-sm bg-tg-bg text-tg-text rounded-lg"
-            >
-              Изменить
-            </button>
-            {story.status !== "published" ? (
+          <details className="studio-disclosure">
+            <summary>Управление публикацией</summary>
+            <div className="studio-publish-controls">
+              <p>
+                {story.status === "published"
+                  ? "История видна в каталоге. Каждая глава публикуется отдельно в своём редакторе."
+                  : "Сначала опубликуйте первую главу, затем откройте историю для игроков."}
+              </p>
               <button
-                onClick={handlePublish}
-                disabled={isLoading}
-                className="px-3 py-1.5 text-sm bg-green-500/20 text-green-400 rounded-lg"
+                className="studio-button secondary"
+                disabled={busy}
+                onClick={changePublication}
               >
-                Опубликовать
+                {busy
+                  ? "Обновляем…"
+                  : story.status === "published"
+                    ? "Снять с публикации"
+                    : "Опубликовать историю"}
               </button>
-            ) : (
-              <button
-                onClick={handleUnpublish}
-                disabled={isLoading}
-                className="px-3 py-1.5 text-sm bg-yellow-500/15 text-yellow-400 rounded-lg"
-              >
-                Снять
-              </button>
-            )}
+            </div>
+          </details>
+        </>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <div className="studio-section-heading">
+            <h2>Оформление истории</h2>
+            <StudioStatus published={story.status === "published"} />
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-tg-bg-secondary rounded-xl p-4 border border-tg-accent">
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-tg-text-secondary mb-2">
-            Название
-          </label>
-          <input
-            type="text"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            className="w-full bg-tg-bg border border-tg-border rounded-xl px-4 py-3 text-tg-text focus:outline-none focus:border-tg-accent"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-tg-text-secondary mb-2">
-            Описание
-          </label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            rows={2}
-            className="w-full bg-tg-bg border border-tg-border rounded-xl px-4 py-3 text-tg-text focus:outline-none focus:border-tg-accent resize-none"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-tg-text-secondary mb-2">
-            Стиль
-          </label>
-          <select
-            value={formData.cover_style}
-            onChange={(e) => setFormData({ ...formData, cover_style: e.target.value })}
-            className="w-full bg-tg-bg border border-tg-border rounded-xl px-4 py-3 text-tg-text focus:outline-none focus:border-tg-accent"
-          >
-            <option value="forest">Лес / санаторий</option>
-            <option value="winter">Зимнее озеро</option>
-            <option value="aurora">Ночной город, сияние</option>
-            <option value="perseids">Звездопад над башней</option>
-            <option value="radio">Ночной эфир</option>
-            <option value="noir">Нуар</option>
-            <option value="romance">Романтика</option>
-            <option value="thriller">Триллер</option>
-            <option value="mystery">Мистика</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-tg-text-secondary mb-2">
-            Порядок в каталоге
-          </label>
-          <input
-            type="number"
-            value={formData.sort_order}
-            onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 0 })}
-            className="w-full bg-tg-bg border border-tg-border rounded-xl px-4 py-3 text-tg-text focus:outline-none focus:border-tg-accent"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-tg-text-secondary mb-2">
-            Метаданные (JSON): tagline, genre, age_rating, main_character, characters, endings
-          </label>
-          <textarea
-            value={formData.meta}
-            onChange={(e) => setFormData({ ...formData, meta: e.target.value })}
-            rows={12}
-            spellCheck={false}
-            className="w-full bg-tg-bg border border-tg-border rounded-xl px-4 py-3 font-mono text-xs text-tg-text focus:outline-none focus:border-tg-accent"
-          />
-        </div>
-
-        <div className="flex gap-2 pt-2">
-          <button
-            onClick={() => setIsEditing(false)}
-            className="flex-1 py-2 bg-tg-bg text-tg-text rounded-xl"
-          >
-            Отмена
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isLoading}
-            className="flex-1 py-2 bg-tg-accent text-white rounded-xl disabled:opacity-50"
-          >
-            {isLoading ? "Сохранение..." : "Сохранить"}
-          </button>
-          <button
-            onClick={handleDelete}
-            disabled={isLoading}
-            className="px-4 py-2 bg-red-500/20 text-red-400 rounded-xl"
-          >
-            🗑
-          </button>
-        </div>
-      </div>
-    </div>
+          <fieldset disabled={busy} className="studio-form-grid">
+            <label className="studio-field wide">
+              Название
+              <input
+                required
+                maxLength={120}
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+              />
+            </label>
+            <label className="studio-field wide">
+              Короткое приглашение
+              <textarea
+                rows={2}
+                value={parsedMeta?.tagline || ""}
+                disabled={!parsedMeta}
+                onChange={(e) => patchMeta("tagline", e.target.value)}
+              />
+              <small>
+                Текст на обложке в каталоге. Пара предложений без спойлеров.
+              </small>
+            </label>
+            <label className="studio-field">
+              Жанр
+              <input
+                value={parsedMeta?.genre || ""}
+                disabled={!parsedMeta}
+                onChange={(e) => patchMeta("genre", e.target.value)}
+                placeholder="Мистика · Триллер"
+              />
+            </label>
+            <label className="studio-field">
+              Возрастная отметка
+              <input
+                value={parsedMeta?.age_rating || ""}
+                disabled={!parsedMeta}
+                onChange={(e) => patchMeta("age_rating", e.target.value)}
+                placeholder="16+"
+              />
+            </label>
+            <label className="studio-field wide">
+              Описание
+              <textarea
+                rows={4}
+                maxLength={1000}
+                value={form.description}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
+              />
+              <small>Подробное описание на странице истории.</small>
+            </label>
+            <label className="studio-field">
+              Обложка
+              <select
+                value={form.cover_style}
+                onChange={(e) =>
+                  setForm({ ...form, cover_style: e.target.value })
+                }
+              >
+                {!COVERS.some((c) => c.id === form.cover_style) && (
+                  <option value={form.cover_style}>{form.cover_style}</option>
+                )}
+                {COVERS.map((cover) => (
+                  <option key={cover.id} value={cover.id}>
+                    {cover.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="studio-field">
+              Порядок в каталоге
+              <input
+                type="number"
+                value={form.sort_order}
+                onChange={(e) =>
+                  setForm({ ...form, sort_order: Number(e.target.value) || 0 })
+                }
+              />
+              <small>Меньше число — выше история.</small>
+            </label>
+          </fieldset>
+          <details className="studio-disclosure">
+            <summary>Дополнительные настройки · JSON</summary>
+            <p>
+              Персонажи, чаты, концовки и игровые параметры. Обычные поля выше
+              сохраняют остальные настройки.
+            </p>
+            <textarea
+              aria-label="Метаданные истории JSON"
+              rows={14}
+              spellCheck={false}
+              disabled={busy}
+              className="font-mono text-xs"
+              value={form.meta}
+              onChange={(e) => setForm({ ...form, meta: e.target.value })}
+            />
+          </details>
+          {error && (
+            <p role="alert" className="studio-error mt-4">
+              {error}
+            </p>
+          )}
+          <div className="studio-form-actions">
+            <p role="status">
+              {dirty
+                ? "Есть несохранённые изменения"
+                : "Все изменения сохранены"}
+            </p>
+            <button
+              type="button"
+              className="studio-button secondary"
+              disabled={busy}
+              onClick={() => {
+                if (dirty && !confirm("Отменить несохранённые изменения?"))
+                  return;
+                setForm(formFor(story));
+                setEditing(false);
+                setError(null);
+              }}
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              className="studio-button"
+              disabled={busy || !dirty}
+            >
+              {busy ? "Сохраняем…" : "Сохранить изменения"}
+            </button>
+          </div>
+          <details className="studio-danger">
+            <summary>Удаление истории</summary>
+            <p>
+              Будут удалены история, её главы и связанный прогресс читателей.
+              Восстановить их через студию нельзя.
+            </p>
+            <button
+              type="button"
+              className="studio-button danger"
+              disabled={busy}
+              onClick={() => {
+                if (
+                  !confirm(
+                    `Удалить «${story.title}» и все её главы вместе с прогрессом читателей? Это необратимо.`,
+                  )
+                )
+                  return;
+                void run(async () => {
+                  await deleteStory(story.id);
+                  setEditing(false);
+                  router.push("/admin/stories");
+                });
+              }}
+            >
+              <Icon name="trash" size={15} />
+              Удалить историю
+            </button>
+          </details>
+        </form>
+      )}
+      {!editing && error && (
+        <p className="studio-error mt-4" role="alert">
+          {error}
+        </p>
+      )}
+      {saved && !editing && (
+        <p className="studio-success mt-4" role="status">
+          Изменения сохранены
+        </p>
+      )}
+    </section>
   );
 }

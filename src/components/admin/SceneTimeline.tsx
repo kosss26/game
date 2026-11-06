@@ -11,11 +11,32 @@ interface SceneTimelineProps {
   choices: Choice[];
 }
 
-
-export function SceneTimeline({ day: _day, scenes, choices }: SceneTimelineProps) {
+export function SceneTimeline({
+  day: _day,
+  scenes,
+  choices,
+}: SceneTimelineProps) {
   const router = useRouter();
   const [expandedScene, setExpandedScene] = useState<string | null>(null);
-  
+  const [query, setQuery] = useState("");
+  const matched = scenes
+    .map((scene, index) => ({ scene, index }))
+    .filter(
+      ({ scene }) =>
+        !query.trim() ||
+        [
+          scene.text,
+          scene.tag,
+          scene.type,
+          scene.speaker,
+          scene.meta?.character,
+        ].some((value) =>
+          value
+            ?.toLocaleLowerCase("ru")
+            .includes(query.trim().toLocaleLowerCase("ru")),
+        ),
+    );
+
   const choicesByScene = new Map<string, Choice[]>();
   for (const choice of choices) {
     const existing = choicesByScene.get(choice.scene_id) || [];
@@ -38,7 +59,7 @@ export function SceneTimeline({ day: _day, scenes, choices }: SceneTimelineProps
       <div className="text-center py-12 bg-tg-bg-secondary rounded-xl">
         <p className="text-tg-text-hint mb-2">Сцен пока нет</p>
         <p className="text-sm text-tg-text-secondary">
-          Используйте вкладку &quot;Импорт&quot; для добавления сцен из скрипта
+          Сохраните сценарий, чтобы увидеть сцены и переходы.
         </p>
       </div>
     );
@@ -46,57 +67,85 @@ export function SceneTimeline({ day: _day, scenes, choices }: SceneTimelineProps
 
   return (
     <div className="space-y-2">
-      {scenes.map((scene, index) => {
+      <label className="studio-field mb-4">
+        Найти сцену
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Текст, персонаж или метка"
+        />
+      </label>
+      {!matched.length && (
+        <p role="status" className="studio-description">
+          Подходящих сцен нет. Попробуйте другой запрос.
+        </p>
+      )}
+      {matched.map(({ scene, index }) => {
         const sceneChoices = choicesByScene.get(scene.id) || [];
         const isExpanded = expandedScene === scene.id;
-        
+
         return (
           <div
             key={scene.id}
             className="bg-tg-bg-secondary rounded-xl border border-tg-border overflow-hidden"
           >
             {/* Scene header */}
-            <div
+            <button
+              type="button"
+              aria-expanded={isExpanded}
+              aria-controls={`scene-${scene.id}`}
               onClick={() => setExpandedScene(isExpanded ? null : scene.id)}
-              className="flex items-center gap-3 p-3 cursor-pointer hover:bg-tg-bg-tertiary transition-colors"
+              className="flex w-full items-center gap-3 p-3 text-left cursor-pointer hover:bg-tg-bg-tertiary transition-colors"
             >
               <span className="text-xs text-tg-text-hint w-8 text-right">
                 #{index + 1}
               </span>
-              
-              <span className={`text-xs px-2 py-0.5 rounded ${getTypeColor(scene.type)}`}>
+
+              <span
+                className={`text-xs px-2 py-0.5 rounded ${getTypeColor(scene.type)}`}
+              >
                 {getTypeLabel(scene.type)}
               </span>
-              
+
               {scene.speaker && (
                 <span className="text-xs text-tg-accent">
                   {scene.meta?.character || scene.speaker.toUpperCase()}
                 </span>
               )}
-              
+
               <span className="flex-1 text-sm text-tg-text truncate">
-                {scene.text || describe(scene) || getTypePlaceholder(scene.type)}
+                {scene.text ||
+                  describe(scene) ||
+                  getTypePlaceholder(scene.type)}
               </span>
-              
+
               {scene.tag && (
                 <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded">
                   #{scene.tag}
                 </span>
               )}
-              
+
               <svg
                 className={`w-4 h-4 text-tg-text-hint transition-transform ${isExpanded ? "rotate-180" : ""}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
-            </div>
+            </button>
 
             {/* Expanded content */}
             {isExpanded && (
-              <div className="border-t border-tg-border p-3 space-y-3">
+              <div
+                id={`scene-${scene.id}`}
+                className="border-t border-tg-border p-3 space-y-3"
+              >
                 {/* Full text */}
                 {scene.text && (
                   <div>
@@ -120,7 +169,9 @@ export function SceneTimeline({ day: _day, scenes, choices }: SceneTimelineProps
                 {/* Choices */}
                 {sceneChoices.length > 0 && (
                   <div>
-                    <p className="text-xs text-tg-text-hint mb-1">Варианты ответа:</p>
+                    <p className="text-xs text-tg-text-hint mb-1">
+                      Варианты ответа:
+                    </p>
                     <div className="space-y-1">
                       {sceneChoices.map((choice) => (
                         <div
@@ -133,11 +184,12 @@ export function SceneTimeline({ day: _day, scenes, choices }: SceneTimelineProps
                               → {choice.goto_tag}
                             </span>
                           )}
-                          {choice.set_flags && Object.keys(choice.set_flags).length > 0 && (
-                            <span className="text-xs text-yellow-400">
-                              [flags]
-                            </span>
-                          )}
+                          {choice.set_flags &&
+                            Object.keys(choice.set_flags).length > 0 && (
+                              <span className="text-xs text-yellow-400">
+                                [flags]
+                              </span>
+                            )}
                         </div>
                       ))}
                     </div>
@@ -226,11 +278,17 @@ function getTypePlaceholder(type: Scene["type"]): string {
 function describe(scene: Scene): string {
   const m = scene.meta || {};
   if (scene.type === "jump") {
-    const target = m.goto_tag ? `→ ${m.goto_tag}` : m.skip ? `пропустить ${m.skip}` : "проход";
+    const target = m.goto_tag
+      ? `→ ${m.goto_tag}`
+      : m.skip
+        ? `пропустить ${m.skip}`
+        : "проход";
     return m.condition ? `если ${m.condition} ${target}` : target;
   }
   if (scene.type === "set") return (m.ops || []).join(", ");
-  if (scene.type === "end") return m.ending ? `концовка: ${m.ending}` : "конец дня";
-  if (scene.type === "pause") return `${Math.round((m.pause_duration || 0) / 1000)} с${m.pause_label ? ` · ${m.pause_label}` : ""}`;
+  if (scene.type === "end")
+    return m.ending ? `концовка: ${m.ending}` : "конец дня";
+  if (scene.type === "pause")
+    return `${Math.round((m.pause_duration || 0) / 1000)} с${m.pause_label ? ` · ${m.pause_label}` : ""}`;
   return "";
 }
