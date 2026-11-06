@@ -7,7 +7,7 @@
 @chat unknown Тёма | kind=dm | character=tema
 
 [chat polina]
-SYS: Понедельник · 22:10
+SYS: Вторник · 22:10
 polina: Я тут. Буду писать каждый час, если смогу подняться
 IF dead -> dawn_dead
 IF found -> night_found
@@ -208,7 +208,7 @@ SET tema_revenge
 :: dawn
 // ---------- Последний час: личные сообщения перед приездом полиции ----------
 [chat polina]
-SYS: Вторник, 30 декабря · 07:02
+SYS: Среда, 30 декабря · 07:02
 SYS: Метель кончилась. Впервые за три дня виден другой берег.
 IF dead -> lh_polina_dead
 IF !found -> lh_polina_none
@@ -319,7 +319,7 @@ mark: Обещаю.
 
 :: dawn_police
 [chat group]
-SYS: Вторник, 30 декабря · 08:04
+SYS: Среда, 30 декабря · 08:04
 polina: Полиция. Две машины и МЧС. Дорогу расчистили
 SET alive = false
 IF found && !dead && found_at <= 6 -> set_alive
