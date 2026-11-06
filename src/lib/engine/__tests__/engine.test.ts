@@ -233,3 +233,16 @@ describe("выбор на время", () => {
     expect(st3.kind === "choice" && st3.timerMs).toBeNull();
   });
 });
+
+describe("границы шкал (__min_/__max_)", () => {
+  it("значение не выходит за пределы", () => {
+    let f = applyOps({}, ["__max_trust = 10", "__min_trust = 0", "trust = 9"]);
+    f = applyOps(f, ["trust += 5"]);
+    expect(f.trust).toBe(10);
+    f = applyOps(f, ["trust -= 30"]);
+    expect(f.trust).toBe(0);
+  });
+  it("без границ всё как раньше", () => {
+    expect(applyOps({ x: 1 }, ["x += 5"]).x).toBe(6);
+  });
+});

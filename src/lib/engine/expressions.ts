@@ -284,6 +284,15 @@ export function applyOp(flags: Flags, op: string): Flags {
   if (operator === "=") next[key] = value;
   else if (operator === "+=") next[key] = toNum(next[key]) + toNum(value);
   else if (operator === "-=") next[key] = toNum(next[key]) - toNum(value);
+  // Границы шкал: флаги __min_<key> / __max_<key> (задаются в сценарии через SET)
+  if (operator !== "=" || typeof next[key] === "number") {
+    const lo = flags[`__min_${key}`];
+    const hi = flags[`__max_${key}`];
+    if (typeof next[key] === "number") {
+      if (typeof hi === "number" && (next[key] as number) > hi) next[key] = hi;
+      if (typeof lo === "number" && (next[key] as number) < lo) next[key] = lo;
+    }
+  }
   return next;
 }
 
