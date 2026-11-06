@@ -204,6 +204,14 @@ ALTER TABLE choice_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE purchases ENABLE ROW LEVEL SECURITY;
 
+-- Настройки приложения, которые меняются из студии (например, бесплатный режим)
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS "Anyone can read published stories" ON stories;
 CREATE POLICY "Anyone can read published stories" ON stories
   FOR SELECT USING (status = 'published');

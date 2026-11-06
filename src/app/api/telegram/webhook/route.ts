@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { config } from "@/lib/config";
+import { isGlobalFree } from "@/lib/settings";
 import { db } from "@/lib/supabase/server";
 import { callBot, escapeHtml, sendMessage, webAppButton } from "@/lib/telegram/bot";
 import { decodePayload, grantPurchase } from "@/lib/game/purchases";
@@ -70,7 +71,7 @@ async function ensureUser(from: TgUser, refParam?: string) {
     if (referrer && Number(referrer.telegram_id) > 0) {
       await sendMessage(
         referrer.telegram_id,
-        config.freeAccess ? `По вашему приглашению присоединился <b>${escapeHtml(from.first_name)}</b>. Теперь можно сравнить ваши финалы.` : `По вашему приглашению присоединился <b>${escapeHtml(from.first_name)}</b>. Начислено: ${config.referralBonus} ${plural(config.referralBonus, "пропуск ожидания", "пропуска ожидания", "пропусков ожидания")}.`
+        (await isGlobalFree()) ? `По вашему приглашению присоединился <b>${escapeHtml(from.first_name)}</b>. Теперь можно сравнить ваши финалы.` : `По вашему приглашению присоединился <b>${escapeHtml(from.first_name)}</b>. Начислено: ${config.referralBonus} ${plural(config.referralBonus, "пропуск ожидания", "пропуска ожидания", "пропусков ожидания")}.`
       ).catch(() => undefined);
     }
   }

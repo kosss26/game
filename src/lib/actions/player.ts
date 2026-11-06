@@ -3,6 +3,7 @@
 import { db } from "@/lib/supabase/server";
 import { resolveUser, isUserAdmin } from "@/lib/auth/session";
 import { config } from "@/lib/config";
+import { isGlobalFree } from "@/lib/settings";
 import { computeAccess, canPlay, hasSeasonPass, type DayAccess } from "@/lib/game/access";
 import { encodePayload, grantPurchase, isUuid } from "@/lib/game/purchases";
 import { createStarsInvoiceLink, miniAppLink } from "@/lib/telegram/bot";
@@ -124,8 +125,8 @@ function storyMeta(s: Pick<Story, "meta">): StoryMeta {
 }
 
 /** Бесплатный доступ: включён для всех (FREE_ACCESS) или выдан игроку в студии */
-function hasFreeAccess(user: User | null): boolean {
-  return config.freeAccess || !!user?.meta?.free_access;
+async function hasFreeAccess(user: User | null): Promise<boolean> {
+  return !!user?.meta?.free_access || (await isGlobalFree());
 }
 
 async function loadAccessContext(user: User | null, storyId: string) {
@@ -150,7 +151,7 @@ async function loadAccessContext(user: User | null, storyId: string) {
   const purchases = (purchaseRes.data || []) as Array<Pick<Purchase, "product" | "day_number">>;
   const isAdmin = await isUserAdmin(user);
   const storyFree = !!((storyRow?.meta || {}) as StoryMeta).free;
-  const free = storyFree || hasFreeAccess(user);
+  const free = storyFree || (await hasFreeAccess(user));
   const access = computeAccess({
     days: allDays,
     progresses,
@@ -278,7 +279,7 @@ export async function getProfile(token: string | null): Promise<ProfileView> {
     shareLink: miniAppLink(user && !user.is_guest ? `ref_${user.telegram_id}` : undefined),
     invited,
     referralBonus: config.referralBonus,
-    freeAccess: hasFreeAccess(user),
+    freeAccess: await hasFreeAccess(user),
   };
 }
 

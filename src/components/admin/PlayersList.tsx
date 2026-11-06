@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listPlayers, setFreeAccess, type PlayerFilter, type PlayerList } from "@/lib/actions/players";
+import { FreeModeToggle } from "./FreeModeToggle";
 
 const FILTERS: Array<{ id: PlayerFilter; label: string }> = [
   { id: "all", label: "Все" },
@@ -71,10 +72,11 @@ export function PlayersList() {
           {data.totals.guests ? ` · ${data.totals.guests} гостей` : ""}
         </p>
       )}
+      <div className="mb-4">
+        <FreeModeToggle onChange={() => load()} />
+      </div>
       {data?.globalFree && (
-        <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
-          Сейчас бесплатный режим включён для всех (FREE_ACCESS). Отметка «бесплатно» у игрока начнёт работать, когда вы вернёте оплату.
-        </div>
+        <p className="mb-4 text-xs text-tg-text-hint">Пока бесплатно всем, отметка «бесплатно» у отдельного игрока ни на что не влияет. Она заработает, когда вы вернёте оплату.</p>
       )}
 
       <input

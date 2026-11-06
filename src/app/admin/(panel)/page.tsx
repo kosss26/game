@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getAllStories } from "@/lib/actions/admin";
+import { FreeModeToggle } from "@/components/admin/FreeModeToggle";
 
 export default async function AdminDashboard() {
   const stories = await getAllStories();
@@ -18,6 +19,11 @@ export default async function AdminDashboard() {
         <StatCard label="Всего историй" value={totalStories} />
         <StatCard label="Опубликовано" value={publishedStories} color="green" />
         <StatCard label="Черновики" value={draftStories} color="yellow" />
+      </div>
+
+      {/* Бесплатный режим */}
+      <div className="mb-8">
+        <FreeModeToggle />
       </div>
 
       {/* Quick actions */}

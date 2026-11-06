@@ -46,9 +46,8 @@ export const config = {
   },
   referralBonus: parseInt(process.env.REFERRAL_BONUS_SKIPS || "1", 10),
   /**
-   * Бесплатный режим: все главы открываются сразу, без ожидания и оплаты.
-   * По умолчанию выключен; включить для всех — FREE_ACCESS=true в файле настроек.
-   * Отдельные истории можно сделать бесплатными через meta.free в story.json.
+   * Принудительный бесплатный режим из файла настроек (FREE_ACCESS=true).
+   * Обычно режим переключается в студии (таблица app_settings) — см. lib/settings.ts.
    */
   freeAccess: process.env.FREE_ACCESS === "true",
   defaultWaitHours: parseFloat(process.env.DEFAULT_WAIT_HOURS || "12"),

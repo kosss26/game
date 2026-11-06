@@ -79,7 +79,7 @@ export function PlayerCard({ detail }: { detail: PlayerDetail }) {
             {p.free_access ? "включён" : "выключен"}
           </span>
         </div>
-        {detail.globalFree && <p className="mt-2 text-xs text-yellow-300">Сейчас бесплатно всем (FREE_ACCESS). Эта отметка заработает, когда вы вернёте оплату.</p>}
+        {detail.globalFree && <p className="mt-2 text-xs text-yellow-300">Сейчас в студии включено «Всё бесплатно для всех». Эта отметка заработает, когда вы вернёте оплату.</p>}
         {!p.is_guest && (
           <>
             <input

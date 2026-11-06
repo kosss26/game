@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth/session";
 import { isUuid } from "@/lib/game/purchases";
-import { config } from "@/lib/config";
+import { isGlobalFree } from "@/lib/settings";
 import type { Day, Purchase, Story, StoryMeta, User } from "@/lib/types/database";
 
 export type PlayerFilter = "all" | "free" | "buyers" | "active" | "blocked" | "guests";
@@ -143,7 +143,7 @@ export async function listPlayers(input: { q?: string; filter?: PlayerFilter; li
       free: allUsers.filter(u => u.meta?.free_access).length,
       buyers: buyers.size,
     },
-    globalFree: config.freeAccess,
+    globalFree: await isGlobalFree(),
   };
 }
 
@@ -220,7 +220,7 @@ export async function getPlayer(userId: string): Promise<PlayerDetail | null> {
     purchases: purchases.map(p => ({ id: p.id, product: p.product, story_id: p.story_id, day_number: p.day_number, stars: p.stars, source: p.source, created_at: p.created_at, storyTitle: p.story_id ? titles.get(p.story_id) || null : null })),
     invited: (invitedRaw || []).length,
     referredBy,
-    globalFree: config.freeAccess,
+    globalFree: await isGlobalFree(),
   };
 }
 
@@ -300,4 +300,22 @@ export async function resetPlayerStory(userId: string, storyId: string): Promise
   if (error) throw new Error(error.message);
   touch(userId);
   return { ok: true };
+}
+
+// ============== БЕСПЛАТНЫЙ РЕЖИМ ДЛЯ ВСЕХ ==============
+
+export async function getGlobalFreeMode(): Promise<{ enabled: boolean; forced: boolean; updatedAt: string | null }> {
+  await requireAdmin();
+  const { getFreeSetting } = await import("@/lib/settings");
+  return getFreeSetting();
+}
+
+/** Открыть всё всем бесплатно (или вернуть оплату). Действует сразу, без перезапуска */
+export async function setGlobalFreeMode(enabled: boolean): Promise<{ enabled: boolean; forced: boolean; updatedAt: string | null }> {
+  await requireAdmin();
+  const { writeGlobalFree, getFreeSetting } = await import("@/lib/settings");
+  await writeGlobalFree(!!enabled);
+  revalidatePath("/admin");
+  revalidatePath("/admin/players");
+  return getFreeSetting();
 }
