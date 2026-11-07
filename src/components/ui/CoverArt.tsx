@@ -416,7 +416,7 @@ const STYLES: Record<string, () => React.JSX.Element> = {
 };
 
 const ILLUSTRATIONS: Record<string, string> = {
-  perseids: "petlya", winter: "beliy-shum", forest: "tihiy-chas", aurora: "severnoe-siyanie", radio: "ne-spitsya",
+  perseids: "petlya", winter: "beliy-shum", forest: "tihiy-chas", aurora: "severnoe-siyanie", radio: "ne-spitsya", pryanik: "otlozhennye",
 };
 
 export function CoverArt({ style, className = "", thumbnail = false, priority = false }: { style?: string | null; className?: string; thumbnail?: boolean; priority?: boolean }) {

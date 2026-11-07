@@ -14,6 +14,7 @@ const COVERS = [
   { id: "aurora", label: "Северное сияние" },
   { id: "perseids", label: "Звездопад над башней" },
   { id: "radio", label: "Ночной эфир" },
+  { id: "pryanik", label: "Пряник и свеча" },
   { id: "noir", label: "Нуар" },
   { id: "romance", label: "Романтика" },
   { id: "thriller", label: "Триллер" },
