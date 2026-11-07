@@ -8,6 +8,22 @@ export const STARTUP_BOOTSTRAP = String.raw`(function () {
   var state = window.__polnochBoot = { hydrated: false, assetFailed: false };
   var interactive = /^(\/$|\/story\/|\/play\/|\/profile(?:\/|$)|\/admin(?:\/|$))/.test(location.pathname);
   var watchdog;
+  var startedAt = Date.now();
+  var launchId = startedAt.toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  var reported = {};
+  function report(phase) {
+    if (reported[phase] || !interactive) return;
+    reported[phase] = true;
+    try {
+      if (typeof window.fetch === 'function') window.fetch('/api/startup', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit', keepalive: true,
+        body: JSON.stringify({ id: launchId, phase: phase, elapsed: Date.now() - startedAt,
+          bridge: !!(window.TelegramWebviewProxy && window.TelegramWebviewProxy.postEvent) })
+      }).catch(function () {});
+    } catch (_) {}
+  }
+  report('document');
   function reloadFresh() {
     try {
       var url = new URL(location.href);
@@ -19,8 +35,10 @@ export const STARTUP_BOOTSTRAP = String.raw`(function () {
     try {
       if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.ready) {
         window.Telegram.WebApp.ready();
+        report('ready');
       } else if (window.TelegramWebviewProxy && window.TelegramWebviewProxy.postEvent) {
         window.TelegramWebviewProxy.postEvent('web_app_ready', JSON.stringify(''));
+        report('ready');
       } else if (window.external && typeof window.external.notify === 'function') {
         window.external.notify(JSON.stringify({ eventType: 'web_app_ready', eventData: '' }));
       } else if (window.parent !== window) {
@@ -42,6 +60,7 @@ export const STARTUP_BOOTSTRAP = String.raw`(function () {
       button.addEventListener('click', reloadFresh);
     }
     box.hidden = false;
+    report('recovery');
     ready();
   }
   function retryAssetOnce() {
@@ -56,6 +75,7 @@ export const STARTUP_BOOTSTRAP = String.raw`(function () {
   }
   window.addEventListener('polnoch:hydrated', function () {
     state.hydrated = true;
+    report('hydrated');
     clearTimeout(watchdog);
     var box = document.getElementById('polnoch-startup-recovery');
     if (box) box.hidden = true;

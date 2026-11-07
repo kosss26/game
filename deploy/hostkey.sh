@@ -16,7 +16,7 @@ MODE=${1:-status}
 die() { printf '\nОШИБКА: %s\n' "$*" >&2; exit 1; }
 say() { printf '\n== %s\n' "$*"; }
 [[ $EUID == 0 ]] || die 'Запустите от root'
-case "$MODE" in init|install|update|bot|status|startup-check|renew|relay-config|relay-apply) ;; *) die 'Режимы: init | install | update | bot | status | startup-check | renew | relay-config | relay-apply' ;; esac
+case "$MODE" in init|install|update|bot|status|startup-check|startup-events|renew|relay-config|relay-apply) ;; *) die 'Режимы: init | install | update | bot | status | startup-check | startup-events | renew | relay-config | relay-apply' ;; esac
 for cmd in docker git python3 curl openssl flock ss; do command -v "$cmd" >/dev/null || die "Не найдена команда $cmd"; done
 [[ ! -L "$STATE" && ! -L /etc/polnoch-stories && ! -L "$ACME" ]] || die 'Каталоги установки не должны быть символическими ссылками'
 mkdir -p "$STATE" /etc/polnoch-stories
@@ -288,6 +288,10 @@ case "$MODE" in
     ready
     compose ps
     curl -fsS --max-time 5 http://127.0.0.1:3500/api/health || true
+    ;;
+  startup-events)
+    ready
+    compose logs --since 15m --tail 1000 app 2>&1 | python3 -c 'import sys; print("".join(line for line in sys.stdin if "[polnoch-startup]" in line), end="")'
     ;;
   startup-check)
     ready

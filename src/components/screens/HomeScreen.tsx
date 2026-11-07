@@ -11,6 +11,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ErrorState } from "@/components/ui/States";
 import { LibraryNav } from "@/components/ui/LibraryChrome";
 import { Countdown } from "@/components/ui/Countdown";
+import { catalogGenre } from "@/lib/game/genres";
 import { chaptersLabel } from "@/lib/utils/plural";
 
 function greeting(): string {
@@ -56,8 +57,8 @@ export function HomeScreen() {
     || items?.find(item => item.status === "new" && item.id !== resume?.id)
     || items?.find(item => item.id !== resume?.id) || null;
   const filtering = filter !== "all" || !!genre;
-  const genres = Array.from(new Set((items || []).map(item => item.meta.genre).filter(Boolean))) as string[];
-  const filtered = (items || []).filter(item => (filter === "all" || filter === "new" && item.status === "new" || filter === "active" && ["in_progress", "waiting"].includes(item.status) || filter === "finished" && item.status === "finished") && (!genre || item.meta.genre === genre));
+  const genres = Array.from(new Set((items || []).map(item => catalogGenre(item.meta.genre)).filter(Boolean))) as string[];
+  const filtered = (items || []).filter(item => (filter === "all" || filter === "new" && item.status === "new" || filter === "active" && ["in_progress", "waiting"].includes(item.status) || filter === "finished" && item.status === "finished") && (!genre || catalogGenre(item.meta.genre) === genre));
   const rest = filtering ? filtered : items?.filter(item => item.id !== featured?.id && item.id !== resume?.id) || [];
 
 

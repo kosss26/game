@@ -104,3 +104,24 @@ The new launch response has no-store headers, normal startup has no hydration
 errors, and the diagnostic checker correctly fails for a missing JS asset.
 No test sent messages to real Telegram recipients. Native device confirmation
 and actual VPS container restart/OOM history require the server-side check.
+
+## Per-launch diagnostic events
+
+The independent bootstrap now posts four bounded, best-effort phases to
+`/api/startup`: document, ready (SDK/bridge call returned, not a native ACK),
+hydrated, recovery. An ephemeral random launch ID correlates these events in
+app logs. Only ID, phase, elapsed milliseconds and bridge presence are logged;
+no initData, Telegram ID, token, URL, conversation or persistent device ID.
+Requests omit cookies. Failure to report never blocks startup. The endpoint
+limits request size and rate and discards all unknown fields.
+
+After reproducing a failed launch, inspect only this app's log:
+
+```sh
+bash /opt/polnoch-stories/deploy/hostkey.sh startup-events
+```
+
+A ready event proves an attempted call, not that Telegram
+hid its native loader. Missing events alone cannot distinguish no document
+from a failed reporting request. Safari health success does not establish
+that Telegram's WebView received HTML or the same network route.
