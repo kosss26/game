@@ -172,7 +172,7 @@ function AttachmentBody({ a, out, fresh, at }: { a: Attachment; out?: boolean; f
           <p className={`mb-0.5 flex items-center gap-1 text-[12.5px] font-medium ${out ? "text-white/80" : "text-accent"}`}>
             <Icon name="forward" size={12} /> Переслано{a.from ? ` от ${a.from}` : ""}
           </p>
-          <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.38]">{a.body}</p>
+          <AttachmentBody a={parseAttachment(a.body)} out={out} fresh={fresh} at={at} />
         </div>
       );
     case "deleted":

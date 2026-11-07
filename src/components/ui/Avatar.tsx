@@ -1,7 +1,8 @@
 "use client";
 import Image from "next/image";
 import { useState } from "react";
-import { CHARACTER_PORTRAITS } from "@/lib/game/story-media";
+import { Icon } from "./Icon";
+import { CHARACTER_PORTRAITS, CHARACTER_ICONS } from "@/lib/game/story-media";
 import type { Character } from "@/lib/types/database";
 
 const FALLBACK = ["#8b7cff", "#e17076", "#4fae9b", "#e0a34a", "#5aa0e6", "#c06fd4"];
@@ -31,6 +32,7 @@ export function Avatar({
 }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const portrait = character?.avatar || (character?.name ? CHARACTER_PORTRAITS[character.name] : null);
+  const identityIcon = character?.name ? CHARACTER_ICONS[character.name] : undefined;
   const color = characterColor(id, character);
   const initials = character?.initials || (character?.name || id).slice(0, 1).toUpperCase();
   return (
@@ -43,7 +45,7 @@ export function Avatar({
           boxShadow: `0 6px 18px -8px ${color}`,
         }}
       >
-        {portrait && portrait !== failedSrc ? <Image unoptimized width={256} height={256} src={portrait} alt="" className="h-full w-full rounded-full object-cover" onError={()=>setFailedSrc(portrait)} /> : initials}
+        {portrait && portrait !== failedSrc ? <Image unoptimized width={256} height={256} src={portrait} alt="" className="h-full w-full rounded-full object-cover" onError={()=>setFailedSrc(portrait)} /> : identityIcon ? <Icon name={identityIcon} size={Math.round(size*0.52)}/> : initials}
       </div>
       {online !== undefined && (
         <span

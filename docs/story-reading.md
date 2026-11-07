@@ -13,8 +13,8 @@ clues and reading settings. Photo viewer is another native dialog with a close
 button clear of Telegram's content safe area; captions stay readable and images
 are opened only when requested. Failed media retains descriptions.
 
-Six generated character portraits cover Asya, Lera, Fyodor, Mira, Anton and Nika.
-Other characters retain initials. Authors can provide a Character.avatar asset;
+The first release added six main-character portraits. Full cast and photo-message
+coverage is now described in [all-story-visuals.md](all-story-visuals.md). Authors can provide a Character.avatar asset;
 existing content and snapshots need no migration. Eight optimized WebP assets
 (six 256px portraits and two 600x800 story photos) are served locally.
 
