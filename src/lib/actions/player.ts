@@ -112,7 +112,7 @@ export type DayPayload =
     }
   | { ok: false; reason: "not_found" | "locked" | "unauthorized" | "not_published"; access?: DayAccess };
 
-export type ProgressSlice = Pick<Progress, "scene_id" | "flags" | "history" | "state" | "completed" | "snapshot_version">;
+export type ProgressSlice = Pick<Progress, "id" | "scene_id" | "flags" | "history" | "state" | "completed" | "snapshot_version">;
 
 // ---------------------------------------------------------------------------
 // Вспомогательные
@@ -356,7 +356,7 @@ export async function loadDay(token: string | null, storyId: string, dayNumber: 
 
   let { data: progress } = await supabase
     .from("progresses")
-    .select("scene_id, flags, history, state, completed, snapshot_version")
+    .select("id, scene_id, flags, history, state, completed, snapshot_version")
     .eq("user_id", user.id)
     .eq("story_id", storyId)
     .eq("day_id", day.id)
@@ -368,7 +368,10 @@ export async function loadDay(token: string | null, storyId: string, dayNumber: 
       { user_id: user.id, story_id: storyId, day_id: day.id, flags: {}, history: [], state: {}, completed: false, snapshot_version: snap.version },
       { onConflict: "user_id,story_id,day_id", ignoreDuplicates: true }
     );
-    progress = null;
+    const { data: created } = await supabase.from("progresses")
+      .select("id, scene_id, flags, history, state, completed, snapshot_version")
+      .eq("user_id", user.id).eq("story_id", storyId).eq("day_id", day.id).maybeSingle();
+    progress = created;
   }
 
   // Игрок посреди дня, а автор опубликовал новую версию — доигрываем ту, что начали
@@ -447,6 +450,7 @@ function sanitizeHistory(history: unknown): HistoryEntry[] {
 }
 
 export interface SaveInput {
+  progressId?: string;
   storyId: string;
   dayId: string;
   sceneId: string | null;
@@ -468,7 +472,7 @@ export async function saveProgress(token: string | null, input: SaveInput): Prom
     state.pause_until = Math.min(input.state.pause_until, Date.now() + 86_400_000);
     if (input.state.pause_label) state.pause_label = String(input.state.pause_label).slice(0, 120);
   }
-  const { data, error } = await supabase
+  const query = supabase
     .from("progresses")
     .update({
       scene_id: input.sceneId ? String(input.sceneId).slice(0, 80) : null,
@@ -482,6 +486,7 @@ export async function saveProgress(token: string | null, input: SaveInput): Prom
     .eq("day_id", input.dayId)
     .eq("completed", false)
     .select("id");
+  const { data, error } = await (input.progressId ? query.eq("id", input.progressId) : query);
   return { ok: !error && Array.isArray(data) && data.length > 0 };
 }
 
@@ -516,7 +521,7 @@ export async function completeDay(
   const flags = sanitizeFlags(input.flags);
   if (input.ending) flags.__ending = String(input.ending).slice(0, 64);
 
-  const { data, error } = await supabase
+  const query = supabase
     .from("progresses")
     .update({
       scene_id: null,
@@ -532,16 +537,24 @@ export async function completeDay(
     .eq("day_id", input.dayId)
     .eq("completed", false)
     .select("id");
+  const { data, error } = await (input.progressId ? query.eq("id", input.progressId) : query);
 
+  if (error) return { ok: false };
+  if (!Array.isArray(data) || data.length === 0) {
+    const check = supabase.from("progresses").select("completed").eq("user_id", user.id).eq("story_id", input.storyId).eq("day_id", input.dayId);
+    const { data: existing } = await (input.progressId ? check.eq("id", input.progressId) : check).maybeSingle();
+    if (!existing?.completed) return { ok: false };
+  }
   if (input.ending) {
     const meta = { ...(user.meta || {}) };
     const endings = { ...(meta.endings || {}) };
     const list = new Set(endings[input.storyId] || []);
     list.add(String(input.ending).slice(0, 64));
     endings[input.storyId] = [...list];
-    await supabase.from("users").update({ meta: { ...meta, endings } }).eq("id", user.id);
+    const { error: endingError } = await supabase.from("users").update({ meta: { ...meta, endings } }).eq("id", user.id);
+    if (endingError) return { ok: false };
   }
-  return { ok: !error && Array.isArray(data) && data.length > 0 };
+  return { ok: true };
 }
 
 /** Сколько игроков выбрали каждый вариант */

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { SnapshotChoice } from "@/lib/types/database";
 import { isActionChoice, stripAction } from "@/lib/engine/runtime";
+import { useApp } from "@/lib/telegram/TelegramProvider";
 import { Icon } from "@/components/ui/Icon";
 import { formatDuration, useNow } from "@/components/ui/Countdown";
 
@@ -23,10 +24,30 @@ export function ChoicePanel({
   defaultId?: string | null;
   onTick?: () => void;
 }) {
+  const { webApp } = useApp();
   const [picked, setPicked] = useState<string | null>(null);
-  const [started] = useState(() => Date.now());
-  const now = useNow(timerMs ? 100 : 60_000);
-  const left = timerMs ? Math.max(0, timerMs - (now - started)) : 0;
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!timerMs) return;
+    let last = performance.now();
+    let active = true;
+    let visible = document.visibilityState !== "hidden";
+    const tick = () => {
+      const now = performance.now();
+      const delta = now - last;
+      if (visible && active) setElapsed(value => value + delta);
+      last = now;
+    };
+    const visibility = () => { tick(); visible = document.visibilityState !== "hidden"; };
+    const activate = () => { tick(); active = true; };
+    const deactivate = () => { tick(); active = false; };
+    webApp?.onEvent("activated", activate);
+    webApp?.onEvent("deactivated", deactivate);
+    const interval = setInterval(tick, 100);
+    document.addEventListener("visibilitychange", visibility);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", visibility); webApp?.offEvent("activated", activate); webApp?.offEvent("deactivated", deactivate); };
+  }, [timerMs, webApp]);
+  const left = timerMs ? Math.max(0, timerMs - elapsed) : 0;
   const secLeft = Math.ceil(left / 1000);
   const lastSec = useRef<number | null>(null);
 

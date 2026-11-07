@@ -111,6 +111,7 @@ export function PlayScreen({ storyId, dayNumber }: { storyId: string; dayNumber:
       dayId={p.day.id}
       dayNumber={p.day.number}
       dayTitle={p.day.title}
+      progressId={p.progress?.id}
       version={p.version}
       snapshot={p.snapshot}
       characters={p.characters}

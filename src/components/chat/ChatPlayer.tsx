@@ -8,6 +8,7 @@ import { useApp, useBackButton, type Speed } from "@/lib/telegram/TelegramProvid
 import { MessageList, TypingBubble, DayDivider, previewText } from "./Messages";
 import { ThreadTabs, ClueSheet, Toast, MeterBar, type ToastData } from "./ChatChrome";
 import { ChoicePanel, InputPanel, PausePanel, IdleComposer } from "./Composer";
+import { SaveQueue } from "@/lib/game/save-queue";
 import { Avatar } from "@/components/ui/Avatar";
 import { Icon } from "@/components/ui/Icon";
 
@@ -17,6 +18,7 @@ export interface ChatPlayerProps {
   dayNumber: number;
   dayTitle: string;
   version: number;
+  progressId?: string;
   snapshot: SnapshotData;
   characters: Record<string, Character>;
   mainCharacter?: string;
@@ -64,6 +66,17 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 export function ChatPlayer(props: ChatPlayerProps) {
   const { storyId, dayId, dayNumber, dayTitle, version, snapshot, characters, preview, onExit, onComplete } = props;
   const { token, haptic, speed, setSpeed, timers, setTimers, webApp } = useApp();
+  const checkpointKey = !preview && props.progressId ? `pl_checkpoint:${props.progressId}:${version}` : null;
+  const [initial] = useState(() => {
+    if (!checkpointKey || props.initial?.completed) return props.initial;
+    try {
+      const local = JSON.parse(localStorage.getItem(checkpointKey) || "null");
+      if (local && Array.isArray(local.history) && local.history.length >= (props.initial?.history.length || 0)
+        && local.flags && (local.pointer === null || snapshot.scenes.some(s => s.id === local.pointer))) return local as NonNullable<ChatPlayerProps["initial"]>;
+    } catch { /* storage may be unavailable */ }
+    return props.initial;
+  });
+  const [saveFailed, setSaveFailed] = useState(false);
   const rt = useMemo(() => buildRuntime(snapshot), [snapshot]);
 
   const defaultCharacter = useMemo(() => {
@@ -95,7 +108,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
   );
 
   // --- состояние ---
-  const [log, setLog] = useState<HistoryEntry[]>(() => props.initial?.history || []);
+  const [log, setLog] = useState<HistoryEntry[]>(() => initial?.history || []);
   const [ui, setUi] = useState<Ui>({ kind: "running" });
   const [showSettings, setShowSettings] = useState(false);
   const [endReady, setEndReady] = useState(false);
@@ -103,7 +116,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
   const [showClues, setShowClues] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [activeThread, setActiveThread] = useState<string>(() => {
-    const h = props.initial?.history || [];
+    const h = initial?.history || [];
     if (h.length) return h[h.length - 1].thread || MAIN;
     return threadOf(rt.scenes[0]);
   });
@@ -113,14 +126,14 @@ export function ChatPlayer(props: ChatPlayerProps) {
   const [unread, setUnread] = useState<Record<string, number>>({});
   const viewRef = useRef(view);
   viewRef.current = view;
-  const [clueIds, setClueIds] = useState<string[]>(() => foundClues(props.initial?.flags || props.inheritedFlags, props.storyMeta));
+  const [clueIds, setClueIds] = useState<string[]>(() => foundClues(initial?.flags || props.inheritedFlags, props.storyMeta));
   const clueRef = useRef(clueIds);
-  const [hudFlags, setHudFlags] = useState<Flags>(() => props.initial?.flags || props.inheritedFlags);
-  const animateFrom = useRef(props.initial?.history.length || 0);
+  const [hudFlags, setHudFlags] = useState<Flags>(() => initial?.flags || props.inheritedFlags);
+  const animateFrom = useRef(initial?.history.length || 0);
 
   const logRef = useRef<HistoryEntry[]>(log);
-  const flagsRef = useRef<Flags>(props.initial?.flags || props.inheritedFlags);
-  const pointerRef = useRef<string | null>(props.initial?.pointer ?? rt.firstSceneId);
+  const flagsRef = useRef<Flags>(initial?.flags || props.inheritedFlags);
+  const pointerRef = useRef<string | null>(initial?.pointer ?? rt.firstSceneId);
   const pauseRef = useRef<ProgressState>({});
   const lastSpeaker = useRef<string>(defaultCharacter);
   const runId = useRef(0);
@@ -132,28 +145,40 @@ export function ChatPlayer(props: ChatPlayerProps) {
   const stickToBottom = useRef(true);
 
   // --- сохранение ---
+  type Checkpoint = { history: HistoryEntry[]; flags: Flags; pointer: string | null; state: ProgressState; completed: boolean; ending?: string | null };
+  const [queue] = useState(() => new SaveQueue<Checkpoint>(async value => {
+    const input = { progressId: props.progressId, storyId, dayId, sceneId: value.pointer, flags: value.flags, history: value.history, state: value.state, version, ending: value.ending };
+    const result = value.completed ? await completeDay(token, input) : await saveProgress(token, input);
+    if (result.ok) {
+      if (value.completed) setEndReady(true);
+      try { if (checkpointKey && localStorage.getItem(checkpointKey) === JSON.stringify(value)) localStorage.removeItem(checkpointKey); } catch {}
+    }
+    return result.ok;
+  }, ok => setSaveFailed(!ok)));
+  const remember = useCallback((value: Checkpoint) => {
+    try { if (checkpointKey) localStorage.setItem(checkpointKey, JSON.stringify(value)); } catch { /* server saving remains available */ }
+  }, [checkpointKey]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveNow = useCallback(() => {
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = null;
-    }
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
     if (preview || finished.current) return;
-    saveProgress(token, {
-      storyId,
-      dayId,
-      sceneId: pointerRef.current,
-      flags: flagsRef.current,
-      history: logRef.current,
-      state: pauseRef.current,
-      version,
-    }).catch(() => undefined);
-  }, [preview, token, storyId, dayId, version]);
+    const value: Checkpoint = { pointer: pointerRef.current, flags: flagsRef.current, history: logRef.current, state: pauseRef.current, completed: false };
+    remember(value);
+    queue.push(value);
+  }, [preview, queue, remember]);
+  useEffect(() => {
+    const retry = () => { void queue.flush(); };
+    const interval = setInterval(retry, 5000);
+    window.addEventListener("online", retry);
+    return () => { clearInterval(interval); window.removeEventListener("online", retry); };
+  }, [queue]);
 
   const scheduleSave = useCallback(() => {
-    if (preview || saveTimer.current) return;
+    if (preview) return;
+    remember({ pointer: pointerRef.current, flags: flagsRef.current, history: logRef.current, state: pauseRef.current, completed: false });
+    if (saveTimer.current) return;
     saveTimer.current = setTimeout(saveNow, 3000);
-  }, [preview, saveNow]);
+  }, [preview, saveNow, remember]);
 
   useEffect(() => {
     const onHide = () => {
@@ -207,32 +232,29 @@ export function ChatPlayer(props: ChatPlayerProps) {
   const finish = useCallback(
     async (ending: string | null) => {
       if (finished.current) return;
+      finished.current = true;
       setUi({ kind: "ended" });
       haptic("success");
       if (!preview) {
-        await completeDay(token, {
-          storyId,
-          dayId,
-          sceneId: null,
-          flags: flagsRef.current,
-          history: logRef.current,
-          version,
-          ending,
-        }).catch(() => undefined);
+        const value: Checkpoint = { pointer: null, flags: flagsRef.current, history: logRef.current, state: {}, completed: true, ending };
+        remember(value);
+        queue.push(value);
+        // A failed completion stays queued and must be confirmed before leaving.
+        await queue.flush();
+
       }
-      finished.current = true;
       // Не закрываем чат сам: игрок дочитывает и нажимает «Завершить главу»
       endResult.current = { history: logRef.current, flags: flagsRef.current, ending };
-      setEndReady(true);
+      if (preview) setEndReady(true);
     },
-    [haptic, preview, token, storyId, dayId, version]
+    [haptic, preview, queue, remember]
   );
 
   const closeChapter = useCallback(() => {
-    if (!endResult.current) return;
+    if (!endResult.current || saveFailed) return;
     haptic("select");
     onComplete(endResult.current);
-  }, [haptic, onComplete]);
+  }, [haptic, onComplete, saveFailed]);
 
   // --- основной цикл ---
   const run = useCallback(
@@ -334,7 +356,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    const init = props.initial;
+    const init = initial;
     if (init && !init.completed && init.pointer && !rt.indexById.has(init.pointer)) {
       // версия сценария изменилась так, что позиция потеряна — начинаем день заново
       logRef.current = [];
@@ -367,7 +389,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
     }
     if (init && !init.pointer && init.history.length > 0) {
       // день дочитан, но не отмечен завершённым (сбой сети)
-      finish(null);
+      finish((init as typeof init & { ending?: string | null }).ending || null);
       return;
     }
     run(init?.pointer ?? rt.firstSceneId);
@@ -589,6 +611,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
 
   return (
     <div className="chat-bg px-safe relative flex h-[100dvh] flex-col overflow-hidden">
+      {saveFailed && <div role="alert" className="relative z-30 bg-raised px-4 py-3 text-sm text-fg">Не удалось сохранить прогресс. Проверьте связь. <button className="underline" onClick={() => void queue.flush()}>Повторить</button></div>}
       {/* Шапка */}
       <header className="glass relative z-20 border-b border-white/[0.06] pt-safe">
         <div className="flex h-14 items-center gap-2 px-2">

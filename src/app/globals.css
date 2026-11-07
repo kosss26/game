@@ -462,3 +462,9 @@ a {
 .invitation-note { display: block; text-align: center; color: #a499b3; font-size: 11px; line-height: 1.5; margin-top: 10px; }
 .invitation-footer { margin: 28px auto 0; padding: 0 24px; font-size: 11px; line-height: 1.4; color: #a99ab9; text-align: center; }
 .invitation-footer a { display: inline-flex; align-items: center; min-height: 36px; }
+
+.catalog-filters { display:flex; gap:8px; overflow-x:auto; padding:4px 0 12px; }
+.catalog-filters button { flex-shrink:0; border:1px solid #454052; border-radius:20px; padding:8px 12px; font-size:13px; color:#d4cddd; }
+.catalog-filters button[aria-pressed="true"] { background:#8959e8; color:white; border-color:#8959e8; }
+.catalog-genre { display:flex; align-items:center; gap:12px; color:#bab3c5; font-size:14px; }
+.catalog-genre select { min-width:0; flex:1; background:#191823; border:1px solid #454052; border-radius:12px; padding:10px; color:#eee9f6; }
