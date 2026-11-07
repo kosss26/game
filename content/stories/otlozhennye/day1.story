@@ -487,7 +487,7 @@ SET pills_hint
 :: ns_stas
 [chat stas]
 SYS: 23:10
-IF !stas_knows_keeper -> ns_stas_plain
+IF !stas_knows_keeper && !stas_knows_murder -> ns_stas_plain
 stas: Не спишь?
 [if l1_honest_said] stas: Ты не обижайся за «ты решаешь за всех». Просто страшно, понимаешь. За маму
 stas: А что там дальше, в письмах? Ты же видишь?
