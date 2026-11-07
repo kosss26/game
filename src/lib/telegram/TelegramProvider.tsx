@@ -47,6 +47,7 @@ export interface TelegramWebApp extends TelegramViewport {
 
 declare global {
   interface Window {
+    __polnochHydrated?: boolean;
     Telegram?: { WebApp: TelegramWebApp; WebView?: { postEvent: (name: string, callback?: unknown, data?: unknown) => void } };
   }
 }
@@ -171,6 +172,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    window.__polnochHydrated=true;
     window.dispatchEvent(new Event("polnoch:hydrated"));
     let cancelled = false;
     const controller = new AbortController();

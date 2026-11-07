@@ -556,3 +556,47 @@ a {
 .evidence-fragment { display:block; color:#b8acc6; font-size:11px; padding-top:6px; }
 .evidence-document > p { font-size:var(--reading-font); }
 .photo-viewer > .evidence-document > p { font-size:max(var(--reading-font),clamp(18px,3vw,24px)); }
+
+.journal-open { display:flex; align-items:center; justify-content:center; min-width:44px; height:44px; border-radius:50%; color:#cfb7ed; background:#ffffff08; }
+.journal-panel { padding-bottom:calc(16px + var(--tg-content-safe-bottom,0px)); }
+.journal-header { display:flex; align-items:start; justify-content:space-between; gap:12px; padding:20px; position:sticky; top:0; z-index:2; background:#141420; }
+.journal-header h2 { font:500 24px/1.3 'Polnoch Lora',serif; margin-top:4px; }
+.journal-header p { color:#a9a5b9; font-size:13px; margin-top:4px; }
+.journal-header > button { width:44px; height:44px; flex-shrink:0; border-radius:50%; background:#ffffff0a; }
+.journal-eyebrow { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#bfa6de; }
+.journal-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; padding:0 16px 16px; }
+.journal-tabs button { flex-shrink:0; padding:10px 12px; border-radius:16px; border:1px solid #51445e; font-size:13px; min-height:44px; }
+.journal-tabs button[aria-pressed="true"] { background:#8560bd; border-color:#a27dce; color:white; }
+.journal-body { padding:0 16px; min-height:150px; }
+.journal-entry { margin-bottom:12px; padding:16px; background:#ffffff05; border:1px solid #ffffff0a; border-radius:18px; overflow-wrap:anywhere; }
+.journal-entry small, .journal-person small { display:block; color:#aaa0b7; font-size:12px; margin-bottom:7px; }
+.journal-entry p { white-space:pre-wrap; font-size:var(--reading-font); line-height:1.6; }
+.journal-entry h4, .journal-clues > h3 { font-weight:600; margin-bottom:10px; }
+.journal-entry .bubble-in, .journal-entry .bubble-out { max-width:100%; min-width:0; }
+.journal-entry .story-photo { max-width:100%; }
+.journal-empty { padding:24px 0; color:#aaa4b9; line-height:1.6; font-size:15px; }
+.journal-empty button { color:#d2b7f5; text-decoration:underline; min-height:44px; }
+.journal-person { display:flex; gap:12px; padding:16px 0; border-bottom:1px solid #ffffff0c; }
+.journal-person > div:last-child { min-width:0; }
+.journal-person h3 { font-size:16px; font-weight:600; }
+.journal-person p { color:#c2bbcf; font-size:var(--reading-font); line-height:1.55; overflow-wrap:anywhere; }
+.journal-footer { font-size:12px; color:#a29bad; padding:20px 16px 8px; line-height:1.5; }
+.journal-story-button { margin:8px 0 20px; width:100%; }
+.return-recap { min-height:100dvh; background:radial-gradient(ellipse at top,#292036 0,#0b0c13 65%); }
+.return-recap-content { max-width:480px; margin:auto; padding:32px 20px; }
+.return-recap h1 { font:500 32px/1.3 'Polnoch Lora',serif; margin-top:12px; }
+.return-story-title { color:#bbb2c9; font-size:17px; margin:6px 0 24px; }
+.return-chapter { display:block; font-size:12px; color:#bda5d5; margin:20px 0; }
+.return-recap blockquote { font:400 var(--reading-font)/1.6 'Polnoch Lora',serif; padding:0 0 0 16px; border-left:2px solid #8f6db9; margin:18px 0; white-space:pre-wrap; }
+.return-message, .return-decision { margin:14px 0; padding:16px; border-radius:18px; background:#ffffff07; }
+.return-message small, .return-decision small { color:#c6ace2; font-size:12px; display:block; margin-bottom:8px; }
+.return-message p, .return-decision p { font-size:var(--reading-font); line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; }
+.return-decision { border:1px solid #a47bcd40; }
+.return-actions { margin-top:28px; }
+.return-actions > p { text-align:center; color:#aaa0b7; font-size:12px; line-height:1.5; margin-top:12px; }
+.return-actions > .library-secondary { display:block; width:100%; margin:12px auto; }
+.return-actions > .btn-primary { background:#8052e8; box-shadow:none; }
+.return-recap-content { padding-bottom:230px; }
+.return-actions { position:fixed; bottom:0; left:0; right:0; max-width:480px; margin:0 auto; padding:16px 20px calc(12px + var(--tg-content-safe-bottom,0px)); background:#0b0c13f8; border-top:1px solid #ffffff0b; z-index:10; }
+.journal-open { gap:5px; padding:0 10px; }
+.journal-open > span { font-size:12px; }

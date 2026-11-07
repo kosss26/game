@@ -4,6 +4,7 @@ import { STARTUP_BOOTSTRAP } from "../startup-bootstrap";
 function harness(
   options: {
     bridge?: boolean;
+    hydratedBeforeBoot?: boolean;
     store?: Map<string, string>;
     storageFails?: boolean;
     path?: string;
@@ -31,6 +32,7 @@ function harness(
     addEventListener: (event: string, handler: (event?: any) => void) =>
       events.set(event, handler),
   };
+  window.__polnochHydrated=options.hydratedBeforeBoot===true;
   window.parent = window;
   if (options.bridge !== false) window.TelegramWebviewProxy = bridge;
   const store = options.store || new Map<string, string>();
@@ -167,4 +169,13 @@ test("author forms are not reloaded automatically and public invitations need no
   const invite = harness({ path: "/invite/ref_123" });
   jest.advanceTimersByTime(12000);
   expect(invite.box.hidden).toBe(true);
+});
+
+
+test("late bootstrap recognizes hydration that happened before its event listener", () => {
+  const h=harness({hydratedBeforeBoot:true});
+  expect(h.window.__polnochBoot.hydrated).toBe(true);
+  jest.advanceTimersByTime(20000);
+  expect(h.box.hidden).toBe(true);
+  expect(h.reload).not.toHaveBeenCalled();
 });

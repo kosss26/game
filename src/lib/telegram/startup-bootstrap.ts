@@ -5,7 +5,7 @@
  */
 export const STARTUP_BOOTSTRAP = String.raw`(function () {
   if (window.__polnochBoot) return;
-  var state = window.__polnochBoot = { hydrated: false, assetFailed: false };
+  var state = window.__polnochBoot = { hydrated: window.__polnochHydrated === true, assetFailed: false };
   var interactive = /^(\/$|\/story\/|\/play\/|\/profile(?:\/|$)|\/admin(?:\/|$))/.test(location.pathname);
   var watchdog;
   var startedAt = Date.now();
@@ -24,6 +24,7 @@ export const STARTUP_BOOTSTRAP = String.raw`(function () {
     } catch (_) {}
   }
   report('document');
+  if (state.hydrated) report('hydrated');
   function reloadFresh() {
     try {
       var url = new URL(location.href);

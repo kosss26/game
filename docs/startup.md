@@ -147,3 +147,16 @@ confirmation requires repeated phone launches after deployment. Telegram's
 current source has a native trust check before handling web_app_ready and
 separate native window transitions:
 https://github.com/TelegramMessenger/Telegram-iOS/blob/master/submodules/WebUI/Sources/WebAppController.swift
+
+## Late bootstrap after hydration
+
+A sustained gameplay check reproduced a separate race: the async bootstrap
+could subscribe after the provider had already dispatched its one-shot hydrated
+event. The page worked, but after 12 seconds the recovery panel obscured it.
+Six consecutive browser probes reproduced this ordering.
+
+The provider now sets a page-local `__polnochHydrated` flag before dispatching
+the event. A late bootstrap reads it on initialization, records hydration and
+does not show recovery. A regression test starts the bootstrap after hydration
+and advances its watchdog beyond 12 seconds. This fixes the false recovery panel;
+it does not establish the cause of Telegram's separate native placeholder issue.

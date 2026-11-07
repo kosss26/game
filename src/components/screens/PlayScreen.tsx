@@ -10,26 +10,35 @@ import { MessageList, DayDivider, previewText } from "@/components/chat/Messages
 import { ThreadTabs } from "@/components/chat/ChatChrome";
 import { FullscreenLoader, ErrorState } from "@/components/ui/States";
 import { Icon } from "@/components/ui/Icon";
+import { withTimeout } from "@/lib/utils/with-timeout";
+import { ReturnRecap } from "@/components/journal/ReturnRecap";
+import { shouldOfferRecap, readingStampKey, type JournalSource } from "@/lib/game/journal";
 import { DayComplete } from "./DayComplete";
 
 type OkPayload = Extract<DayPayload, { ok: true }>;
 
 export function PlayScreen({ storyId, dayNumber }: { storyId: string; dayNumber: number }) {
   const router = useRouter();
-  const { ready, token, authError, retryAuth } = useApp();
+  const { ready, token, session, authError, retryAuth } = useApp();
   const [payload, setPayload] = useState<DayPayload | null>(null);
   const [failed, setFailed] = useState(false);
   const [mode, setMode] = useState<"chat" | "complete" | "reread">("chat");
   const [result, setResult] = useState<{ history: HistoryEntry[]; flags: Flags; ending: string | null } | null>(null);
+  const [showRecap,setShowRecap] = useState(false);
   const [coverStyle, setCoverStyle] = useState<string | null>(null);
 
-  const load = useCallback(() => {
+  const load = useCallback((forceRecap=false) => {
     setFailed(false);
     setPayload(null);
-    loadDay(token, storyId, dayNumber)
+    withTimeout(loadDay(token, storyId, dayNumber),15000)
       .then(p => {
         setPayload(p);
         if (p.ok) {
+          let last=p.lastPlayedAt;
+          try { const local=session?.user.id?Number(localStorage.getItem(readingStampKey(session.user.id,storyId))):0;
+            if(local&&local>(Date.parse(last||'')||0))last=new Date(local).toISOString();
+          } catch { /* Use confirmed server read time. */ }
+          setShowRecap(!p.progress?.completed && (forceRecap===true || shouldOfferRecap(last)));
           setCoverStyle(p.day.background);
           if (p.progress?.completed) {
             setResult({ history: p.progress.history, flags: p.progress.flags, ending: (p.progress.flags.__ending as string) || null });
@@ -38,7 +47,7 @@ export function PlayScreen({ storyId, dayNumber }: { storyId: string; dayNumber:
         }
       })
       .catch(() => setFailed(true));
-  }, [token, storyId, dayNumber]);
+  }, [token, storyId, dayNumber, session?.user.id]);
 
   useEffect(() => {
     if (ready && token) load();
@@ -104,6 +113,18 @@ export function PlayScreen({ storyId, dayNumber }: { storyId: string; dayNumber:
     );
   }
 
+  if (showRecap) {
+    let history=p.progress?.history||[];let flags={...p.inheritedFlags,...(p.progress?.flags||{})};
+    try {
+      if(p.progress?.id){
+        const local=JSON.parse(localStorage.getItem(`pl_checkpoint:${p.progress.id}:${p.version}`)||'null');
+        if(local&&Array.isArray(local.history)&&local.history.length>=history.length&&local.flags&&(local.pointer===null||p.snapshot.scenes.some(scene=>scene.id===local.pointer))){history=local.history;flags=local.flags;}
+      }
+    } catch { /* The confirmed server history remains available. */ }
+    const live:JournalSource|undefined=p.progress?.id?{dayId:p.day.id,progressId:p.progress.id,number:p.day.number,title:p.day.title,history,flags,updatedAt:p.lastPlayedAt||''}:undefined;
+    return <ReturnRecap storyId={storyId} title={p.story.title} dayNumber={dayNumber} onContinue={()=>setShowRecap(false)} onBack={toStory} live={live} characters={p.characters} meta={p.story.meta}/>;
+  }
+
   return (
     <ChatPlayer
       key={`${p.day.id}:${p.version}`}
@@ -130,6 +151,7 @@ export function PlayScreen({ storyId, dayNumber }: { storyId: string; dayNumber:
             }
           : null
       }
+      onReturnAfterPause={()=>load(true)}
       onExit={toStory}
       onComplete={r => {
         setResult(r);

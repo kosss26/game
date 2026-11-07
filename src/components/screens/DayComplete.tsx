@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import { useInviteFriend } from "@/lib/telegram/useInviteFriend";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getChoiceStats, getStoryView, type StoryView } from "@/lib/actions/player";
-import { useApp } from "@/lib/telegram/TelegramProvider";
+import { JournalPanel } from "@/components/journal/JournalPanel";
+import { dismissPhoto } from "@/lib/utils/modal-scroll";
+import { useApp, useBackButton } from "@/lib/telegram/TelegramProvider";
 import type { Flags, HistoryEntry, SnapshotData, StoryMeta } from "@/lib/types/database";
 import { foundClues } from "@/components/chat/ChatPlayer";
 import { isActionChoice, stripAction } from "@/lib/engine/runtime";
@@ -43,6 +45,8 @@ export function DayComplete(p: Props) {
   const { token, haptic } = useApp();
   const invitation = useInviteFriend();
   const router = useRouter();
+  const [journal,setJournal]=useState(false);
+  useBackButton(()=>{if(dismissPhoto())return;if(journal)setJournal(false);else p.onStory()});
   const [view, setView] = useState<StoryView | null>(null);
   const [stats, setStats] = useState<Record<string, Record<string, number>> | null>(null);
 
@@ -130,6 +134,9 @@ export function DayComplete(p: Props) {
             )}
           </section>
         )}
+
+        <button className="btn-secondary mt-6 w-full" onClick={()=>setJournal(true)}><Icon name="book" size={18}/>Журнал истории</button>
+        {journal&&<JournalPanel storyId={p.storyId} throughDay={p.dayNumber} onClose={()=>setJournal(false)}/>}
 
         {/* Улики */}
         {p.storyMeta.clues && Object.keys(p.storyMeta.clues).length > 0 && p.flags && (

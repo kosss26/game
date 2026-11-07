@@ -1,5 +1,6 @@
 "use server";
 
+import { lastConfirmedRead } from "@/lib/game/journal";
 import { db } from "@/lib/supabase/server";
 import { resolveUser, isUserAdmin } from "@/lib/auth/session";
 import { config } from "@/lib/config";
@@ -106,6 +107,7 @@ export type DayPayload =
       characters: Record<string, Character>;
       progress: ProgressSlice | null;
       inheritedFlags: Flags;
+      lastPlayedAt?: string | null;
       nextDay: { number: number; title: string } | null;
       totalDays: number;
       isLastDay: boolean;
@@ -409,6 +411,7 @@ export async function loadDay(token: string | null, storyId: string, dayNumber: 
     characters: { ...(meta.characters || {}), ...(snapshot.day?.meta?.characters || {}) },
     progress: (progress as ProgressSlice | null) ?? null,
     inheritedFlags,
+    lastPlayedAt: lastConfirmedRead(ctx.progresses.filter(p=>p.completed&&ctx.allDays.some(d=>d.id===p.day_id&&d.day_number<=dayNumber)).map(p=>p.completed_at),progress?.history||[]),
     nextDay: next ? { number: next.dayNumber, title: next.title } : upcoming ? { number: upcoming.day_number, title: upcoming.title } : null,
     totalDays: published.length + ctx.allDays.filter(d => d.status !== "published").length,
     isLastDay: !next && !upcoming,

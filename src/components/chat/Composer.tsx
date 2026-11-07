@@ -16,6 +16,7 @@ export function ChoicePanel({
   timerMs,
   defaultId,
   onTick,
+  paused=false,
 }: {
   prompt: string | null;
   options: Option[];
@@ -23,6 +24,7 @@ export function ChoicePanel({
   timerMs?: number | null;
   defaultId?: string | null;
   onTick?: () => void;
+  paused?: boolean;
 }) {
   const { webApp } = useApp();
   const [picked, setPicked] = useState<string | null>(null);
@@ -35,7 +37,7 @@ export function ChoicePanel({
     const tick = () => {
       const now = performance.now();
       const delta = now - last;
-      if (visible && active) setElapsed(value => value + delta);
+      if (visible && active && !paused) setElapsed(value => value + delta);
       last = now;
     };
     const visibility = () => { tick(); visible = document.visibilityState !== "hidden"; };
@@ -46,13 +48,13 @@ export function ChoicePanel({
     const interval = setInterval(tick, 100);
     document.addEventListener("visibilitychange", visibility);
     return () => { clearInterval(interval); document.removeEventListener("visibilitychange", visibility); webApp?.offEvent("activated", activate); webApp?.offEvent("deactivated", deactivate); };
-  }, [timerMs, webApp]);
+  }, [timerMs, webApp, paused]);
   const left = timerMs ? Math.max(0, timerMs - elapsed) : 0;
   const secLeft = Math.ceil(left / 1000);
   const lastSec = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!timerMs || picked) return;
+    if (!timerMs || picked || paused) return;
     if (secLeft !== lastSec.current) {
       lastSec.current = secLeft;
       if (secLeft <= 3 && secLeft > 0) onTick?.();
@@ -63,7 +65,7 @@ export function ChoicePanel({
       onSelect(def, true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [left, timerMs, picked]);
+  }, [left, timerMs, picked, paused]);
 
   return (
     <div className="choice-panel animate-sheet-up px-3 pb-3 pt-2">
@@ -89,7 +91,7 @@ export function ChoicePanel({
           return (
             <button
               key={o.id}
-              disabled={picked !== null}
+              disabled={picked !== null || paused}
               onClick={() => {
                 setPicked(o.id);
                 onSelect(o);

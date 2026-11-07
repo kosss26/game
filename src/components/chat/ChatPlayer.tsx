@@ -8,6 +8,9 @@ import { useApp, useBackButton, type Speed } from "@/lib/telegram/TelegramProvid
 import { MessageList, TypingBubble, DayDivider, previewText } from "./Messages";
 import { ThreadTabs, ClueSheet, Toast, MeterBar, type ToastData } from "./ChatChrome";
 import { ChoicePanel, InputPanel, PausePanel, IdleComposer } from "./Composer";
+import { readingStampKey, RECAP_AFTER_MS } from "@/lib/game/journal";
+import { JournalPanel } from "@/components/journal/JournalPanel";
+import { dismissPhoto } from "@/lib/utils/modal-scroll";
 import { Sheet } from "@/components/ui/Sheet";
 import { ReadingControls } from "./ReadingControls";
 import { SaveQueue } from "@/lib/game/save-queue";
@@ -37,6 +40,7 @@ export interface ChatPlayerProps {
   /** Последняя глава истории: кнопка «К финалу» вместо «Завершить главу» */
   isLastDay?: boolean;
   onExit: () => void;
+  onReturnAfterPause?: () => void;
   onComplete: (result: { history: HistoryEntry[]; flags: Flags; ending: string | null }) => void;
 }
 
@@ -66,8 +70,8 @@ export function foundClues(flags: Flags, meta?: StoryMeta): string[] {
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 export function ChatPlayer(props: ChatPlayerProps) {
-  const { storyId, dayId, dayNumber, dayTitle, version, snapshot, characters, preview, onExit, onComplete } = props;
-  const { token, haptic, speed, setSpeed, timers, setTimers, webApp } = useApp();
+  const { storyId, dayId, dayNumber, dayTitle, version, snapshot, characters, preview, onExit, onComplete, onReturnAfterPause } = props;
+  const { token, session, haptic, speed, setSpeed, timers, setTimers, webApp } = useApp();
   const checkpointKey = !preview && props.progressId ? `pl_checkpoint:${props.progressId}:${version}` : null;
   const [initial] = useState(() => {
     if (!checkpointKey || props.initial?.completed) return props.initial;
@@ -115,6 +119,8 @@ export function ChatPlayer(props: ChatPlayerProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [endReady, setEndReady] = useState(false);
   const endResult = useRef<{ history: HistoryEntry[]; flags: Flags; ending: string | null } | null>(null);
+  const [appAway,setAppAway] = useState(false);
+  const [showJournal,setShowJournal] = useState(false);
   const [showClues, setShowClues] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const [activeThread, setActiveThread] = useState<string>(() => {
@@ -143,6 +149,8 @@ export function ChatPlayer(props: ChatPlayerProps) {
   const finished = useRef(false);
   speedRef.current = SPEED[speed];
 
+  const readingPaused = useRef(false);
+  readingPaused.current = showJournal || showClues || showSettings || appAway;
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
 
@@ -174,6 +182,23 @@ export function ChatPlayer(props: ChatPlayerProps) {
     window.addEventListener("online", retry);
     return () => { clearInterval(interval); window.removeEventListener("online", retry); };
   }, [queue]);
+
+  useEffect(()=>{
+    if(preview||!session?.user.id)return;
+    const key=readingStampKey(session.user.id,storyId);
+    let leftAt=Date.now();let away=document.visibilityState==='hidden';
+    const mark=()=>{try{localStorage.setItem(key,String(Date.now()))}catch{ /* local preference storage unavailable */ }};
+    const pause=()=>{if(!away)leftAt=Date.now();away=true;setAppAway(true);mark();};
+    const resume=()=>{
+      if(document.visibilityState==='hidden')return;
+      const longPause=away&&Date.now()-leftAt>=RECAP_AFTER_MS;away=false;setAppAway(false);
+      if(longPause)onReturnAfterPause?.();mark();
+    };
+    const visibility=()=>{if(document.visibilityState==='hidden')pause();else resume()};
+    setAppAway(away);mark();document.addEventListener('visibilitychange',visibility);window.addEventListener('pagehide',mark);
+    webApp?.onEvent('deactivated',pause);webApp?.onEvent('activated',resume);
+    return ()=>{mark();document.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',mark);webApp?.offEvent('deactivated',pause);webApp?.offEvent('activated',resume)};
+  },[preview,session?.user.id,storyId,onReturnAfterPause,webApp]);
 
   const scheduleSave = useCallback(() => {
     if (preview) return;
@@ -266,6 +291,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
       const alive = () => runId.current === my;
 
       for (let guard = 0; guard < 10000; guard++) {
+        while(readingPaused.current && alive()) await sleep(100);
         if (!alive()) return;
         const r = resolve(rt, pointer, flagsRef.current);
         flagsRef.current = r.flags;
@@ -279,6 +305,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
           const isNpc = step.scene.type === "message" && step.scene.speaker === "npc";
           const who = step.scene.meta?.character || defaultCharacter;
           if (step.delayMs) await sleep(step.delayMs * sp);
+          while(readingPaused.current && alive()) await sleep(100);
           if (!alive()) return;
           const isBot = !!allCharacters[who]?.bot;
           if (isNpc && !isBot && step.typingMs > 0 && sp > 0) {
@@ -288,6 +315,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
           } else {
             await sleep(sp === 0 || step.scene.meta?.past ? 30 : step.scene.speaker === "me" ? 500 * sp : isBot ? 900 * sp : 350 * sp);
           }
+          while(readingPaused.current && alive()) await sleep(100);
           if (!alive()) return;
           append({
             id: step.scene.id,
@@ -530,7 +558,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
     return () => webApp?.disableClosingConfirmation?.();
   }, [webApp, preview]);
 
-  const nativeBack = useBackButton(onExit);
+  const nativeBack = useBackButton(()=>{if(dismissPhoto())return;if(showJournal)setShowJournal(false);else if(showClues)setShowClues(false);else if(showSettings)setShowSettings(false);else onExit()});
 
   // --- шапка ---
   const chat = threaded ? getChat(view) : null;
@@ -630,7 +658,8 @@ export function ChatPlayer(props: ChatPlayerProps) {
             <p className={`truncate text-[13px] leading-tight ${typingHere ? "text-accent" : online ? "text-ok/90" : "text-faint"}`}>{status}</p>
           </div>
           {preview && <span className="chip bg-warn/15 text-warn">предпросмотр</span>}
-          {hasClues && (
+          {!preview && <button className="journal-open" onClick={()=>setShowJournal(true)} aria-label="Журнал истории"><Icon name="book" size={20}/>{clueIds.length>0&&<span aria-hidden="true">{clueIds.length}</span>}</button>}
+          {hasClues && preview && (
             <button
               onClick={() => setShowClues(true)}
               className="relative flex h-10 items-center gap-1 rounded-full bg-white/[0.06] px-3 text-[13px] font-semibold text-fg/85 active:scale-95"
@@ -708,6 +737,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
                 options={ui.step.options}
                 onSelect={onChoice}
                 timerMs={timers && !preview ? ui.step.timerMs : null}
+                paused={showJournal || showClues || showSettings || appAway}
                 defaultId={ui.step.defaultId}
                 onTick={() => haptic("rigid")}
               />
@@ -728,6 +758,8 @@ export function ChatPlayer(props: ChatPlayerProps) {
         )}
       </div>
 
+      {showJournal && <JournalPanel storyId={storyId} throughDay={dayNumber} onClose={()=>setShowJournal(false)} characters={allCharacters} meta={props.storyMeta}
+        live={{dayId,progressId:props.progressId||'',number:dayNumber,title:dayTitle,history:log,flags:flagsRef.current,updatedAt:''}}/>}
       {showSettings && (
         <SettingsSheet speed={speed} onSpeed={setSpeed} timers={timers} onTimers={setTimers} onClose={() => setShowSettings(false)} onExit={onExit} />
       )}

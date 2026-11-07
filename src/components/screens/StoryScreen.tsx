@@ -7,6 +7,8 @@ import { getStoryView, restartStory, type StoryView } from "@/lib/actions/player
 import { useInviteFriend } from "@/lib/telegram/useInviteFriend";
 import { useApp, useBackButton } from "@/lib/telegram/TelegramProvider";
 import type { DayAccess } from "@/lib/game/access";
+import { JournalPanel } from "@/components/journal/JournalPanel";
+import { dismissPhoto } from "@/lib/utils/modal-scroll";
 import { CoverArt } from "@/components/ui/CoverArt";
 import { Avatar } from "@/components/ui/Avatar";
 import { Icon } from "@/components/ui/Icon";
@@ -21,6 +23,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
   const invitation = useInviteFriend();
   const [view, setView] = useState<StoryView | null | undefined>(undefined);
   const [failed, setFailed] = useState(false);
+  const [journal,setJournal]=useState(false);
   const [restartBusy, setRestartBusy] = useState(false);
   const [restartError, setRestartError] = useState(false);
   const load = useCallback(() => {
@@ -28,7 +31,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
     getStoryView(token, storyId).then(setView).catch(() => setFailed(true));
   }, [token, storyId]);
   useEffect(() => { if (ready) load(); }, [ready, load]);
-  const native = useBackButton(() => router.push("/"));
+  const native = useBackButton(() => {if(dismissPhoto())return;if(journal)setJournal(false);else router.push("/")});
   const unlock = useUnlock(storyId, load);
 
   if (authError) return <ErrorState title="Не удалось войти" action={retryAuth} />;
@@ -100,6 +103,8 @@ export function StoryScreen({ storyId }: { storyId: string }) {
         {days.length === 0 && !view.upcomingDays && <p className="story-help">Главы готовятся к выходу.</p>}
         {unlock.error && <p role="alert" className="story-error">{unlock.error}</p>}
       </section>
+      {(completed>0||days.some(d=>d.status==="in_progress"))&&<button className="story-secondary journal-story-button" onClick={()=>setJournal(true)}><Icon name="book" size={18}/>Журнал истории</button>}
+      {journal&&<JournalPanel storyId={storyId} onClose={()=>setJournal(false)}/>}
       {view.paymentsEnabled && !view.hasPass && !finished && days.length > 1 && <section className="story-pass library-panel"><h2>Без ожидания</h2><p>Все главы этой истории открываются сразу после предыдущей.</p><button className="story-secondary" disabled={unlock.busy} onClick={() => unlock.buy("season_pass")}>Открыть за {view.prices.seasonPass} ⭐</button></section>}
       {view.hasPass && <p className="story-help"><Icon name="bolt" size={15} /> Сезонный пропуск активен</p>}
       {characters.length > 0 && <details className="story-extras"><summary>Персонажи<Icon name="chevron" size={17} /></summary><div className="story-character-list">{characters.map(([id, character]) => <div key={id}><Avatar id={id} character={character} size={36} /><p><strong>{character.name}</strong><span>{character.bio}</span></p></div>)}</div></details>}
