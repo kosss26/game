@@ -145,7 +145,7 @@ export const PHOTO_CATALOG: Array<StoryVisual & {match: string}> = [
     "kind": "photo",
     "src": "/story-media/shmel.webp",
     "fragment": true,
-    "width": 720, "height": 480
+    "width": 720, "height": 360
   },
   {
     "match": "Два кадра рядом: отражение руки на видео с Костей и рука Бахрама сейчас, в гараже. Те же часы. Стальной браслет, красная стрелка",
