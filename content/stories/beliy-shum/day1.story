@@ -116,8 +116,8 @@ SET clue_location
 mark: {name}? Есть что-то?
 
 CHOICE: Что сказать группе? Все, кто сейчас в доме, это прочитают.
-- Перескажу голосовое целиком. -> g_voice_full [set leak_voice, leak_key]
-- Было голосовое в 02:47, но там почти ничего не слышно. -> g_voice_part [set leak_voice]
+- Перескажу голосовое целиком. -> g_voice_full [set leak_voice, leak_key, group_voice_known, group_key_hint]
+- Было голосовое в 02:47, но там почти ничего не слышно. -> g_voice_part [set leak_voice, group_voice_known]
 - Последняя точка её геопозиции — у воды, в 03:12. [if clue_location] -> g_geo [set leak_location]
 - Пока ничего. Проверяю. -> g_nothing
 
@@ -153,7 +153,7 @@ mark: Ладно. Если вспомнишь — пиши мне, хорошо?
 
 :: g_voice_part
 mark: Почти ничего — это что?
-ME: шёпот и шум. разобрала только своё имя и «люблю»
+ME: шёпот и шум. разобрал{|а} только своё имя и «люблю»
 mark: Понятно. Если сможешь разобрать что-то ещё — пиши. Хоть одно слово.
 -> g_after
 
