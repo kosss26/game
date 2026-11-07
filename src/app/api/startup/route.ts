@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 let windowStart = 0;
 let count = 0;
-const phases = new Set(["document", "ready", "hydrated", "recovery"]);
+const phases = new Set(["document", "ready", "hydrated", "recovery", "viewport"]);
 
 /** Ephemeral launch correlation only. Never accept URLs, initData or user IDs. */
 export async function POST(request: Request) {

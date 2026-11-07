@@ -88,6 +88,7 @@ export const STARTUP_BOOTSTRAP = String.raw`(function () {
     showRecovery('Не удалось загрузить файлы приложения. Нажмите «Повторить».');
     setTimeout(retryAssetOnce, 400);
   }, true);
+  window.addEventListener('polnoch:native-viewport', function () { report('viewport'); });
   window.addEventListener('pageshow', ready);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') ready(); });
   ready();

@@ -125,3 +125,25 @@ A ready event proves an attempted call, not that Telegram
 hid its native loader. Missing events alone cannot distinguish no document
 from a failed reporting request. Safari health success does not establish
 that Telegram's WebView received HTML or the same network route.
+
+## Native viewport acknowledgement before fullscreen
+
+A phone report on 2026-11-07 correlated a failed final launch with document,
+ready and hydration in 60 ms. These events establish page execution; they do
+not establish native receipt of ready or successful rendering of the window.
+
+Automatic fullscreen now waits for a native `viewportChanged` round trip and
+300 ms before requesting the next transition. Listeners are installed before
+expand and an explicit `web_app_request_viewport` probe. With no response the
+app stays in expanded mode, without a speculative fullscreen transition. Cleanup
+cancels a pending transition. Only one fullscreen request is allowed; user exits
+are respected. Startup/ready and sign-in never wait for the viewport reply.
+The diagnostic `viewport` phase records receipt of a native event, unlike ready,
+which records an outbound call. Existing phase logging remains best-effort.
+
+This is a mitigation for overlapping native transitions, not a confirmed root
+cause or proof that the iOS placeholder issue has been eliminated. Native
+confirmation requires repeated phone launches after deployment. Telegram's
+current source has a native trust check before handling web_app_ready and
+separate native window transitions:
+https://github.com/TelegramMessenger/Telegram-iOS/blob/master/submodules/WebUI/Sources/WebAppController.swift

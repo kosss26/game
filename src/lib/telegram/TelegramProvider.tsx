@@ -47,7 +47,7 @@ export interface TelegramWebApp extends TelegramViewport {
 
 declare global {
   interface Window {
-    Telegram?: { WebApp: TelegramWebApp };
+    Telegram?: { WebApp: TelegramWebApp; WebView?: { postEvent: (name: string, callback?: unknown, data?: unknown) => void } };
   }
 }
 
@@ -174,7 +174,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
       // Release Telegram's native loading screen before any network sign-in.
       try { tg.ready(); } catch { /* old clients */ }
       if (tg && inTelegram) {
-        removeInsetListeners = setupTelegramViewport(tg, document.documentElement.style);
+        removeInsetListeners = setupTelegramViewport(tg, document.documentElement.style, () => window.Telegram?.WebView?.postEvent("web_app_request_viewport", false));
         try {
           tg.setHeaderColor?.(BG);
           tg.setBackgroundColor?.(BG);

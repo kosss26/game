@@ -21,10 +21,15 @@ function fixture(version = "8.0") {
 }
 
 describe("Telegram fullscreen", () => {
-  it("expands and requests fullscreen once without waiting for a response", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => { jest.clearAllTimers(); jest.useRealTimers(); });
+  it("expands first and requests fullscreen only after a native viewport response", () => {
     const { tg, style, values, listeners } = fixture();
     const cleanup = setupTelegramViewport(tg, style);
     expect(tg.expand).toHaveBeenCalledTimes(1);
+    expect(tg.requestFullscreen).not.toHaveBeenCalled();
+    listeners.get("viewportChanged")!();
+    jest.advanceTimersByTime(300);
     expect(tg.requestFullscreen).toHaveBeenCalledTimes(1);
     expect(values.get("--tg-content-safe-top")).toBe("103px");
     expect(values.get("--tg-content-safe-bottom")).toBe("34px");
@@ -59,9 +64,34 @@ describe("Telegram fullscreen", () => {
     const { tg, style, listeners } = fixture();
     tg.requestFullscreen = jest.fn(() => { throw new Error("unsupported"); });
     expect(() => setupTelegramViewport(tg, style)).not.toThrow();
+    listeners.get("viewportChanged")!();
+    jest.advanceTimersByTime(300);
     listeners.get("fullscreenFailed")!();
     expect(tg.expand).toHaveBeenCalledTimes(2);
     expect(tg.requestFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it("installs listeners before explicitly probing the native viewport", () => {
+    const { tg, style, listeners } = fixture();
+    setupTelegramViewport(tg, style, () => {
+      expect(listeners.has("viewportChanged")).toBe(true);
+      listeners.get("viewportChanged")!();
+      listeners.get("viewportChanged")!();
+    });
+    expect(tg.requestFullscreen).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(300);
+    expect(tg.requestFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not force fullscreen without native acknowledgement and cancels pending transitions on cleanup", () => {
+    const { tg, style, listeners } = fixture();
+    const cleanup = setupTelegramViewport(tg, style);
+    jest.advanceTimersByTime(10000);
+    expect(tg.requestFullscreen).not.toHaveBeenCalled();
+    listeners.get("viewportChanged")!();
+    cleanup();
+    jest.advanceTimersByTime(1000);
+    expect(tg.requestFullscreen).not.toHaveBeenCalled();
   });
 
   it("updates all four edges when native safe areas change or rotate", () => {

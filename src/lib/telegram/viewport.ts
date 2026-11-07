@@ -15,7 +15,25 @@ export interface TelegramViewport {
 export function setupTelegramViewport(
   tg: TelegramViewport,
   style: Pick<CSSStyleDeclaration, "setProperty" | "removeProperty">,
+  requestViewport?: () => void,
 ): () => void {
+  let disposed = false;
+  let requested = false;
+  let fullscreenTimer: ReturnType<typeof setTimeout> | undefined;
+  const onViewport = () => {
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("polnoch:native-viewport"));
+    if (disposed || requested || fullscreenTimer || tg.isFullscreen) return;
+    // A native round trip must precede a new window transition. Leave the
+    // expanded window usable if the client never acknowledges viewport updates.
+    fullscreenTimer = setTimeout(() => {
+      fullscreenTimer = undefined;
+      if (disposed || requested || tg.isFullscreen) return;
+      requested = true;
+      try {
+        if (tg.requestFullscreen && tg.isVersionAtLeast?.("8.0")) tg.requestFullscreen();
+      } catch { /* expanded mode remains usable */ }
+    }, 300);
+  };
   const edges = ["top", "bottom", "left", "right"] as const;
   const applyInsets = () => {
     for (const edge of edges) {
@@ -29,6 +47,7 @@ export function setupTelegramViewport(
     if (!tg.isFullscreen) expand();
   };
   const listeners: [string, () => void][] = [
+    ["viewportChanged", onViewport],
     ["safeAreaChanged", applyInsets],
     ["contentSafeAreaChanged", applyInsets],
     ["fullscreenChanged", applyInsets],
@@ -38,13 +57,12 @@ export function setupTelegramViewport(
   applyInsets();
   for (const [event, callback] of listeners) tg.onEvent(event, callback);
   expand();
-  try {
-    if (!tg.isFullscreen && tg.requestFullscreen && tg.isVersionAtLeast?.("8.0")) tg.requestFullscreen();
-  } catch {
-    // Expanded mode is already active; a failed native request is non-fatal.
-  }
+  try { requestViewport?.(); } catch { /* optional native probe */ }
+
 
   return () => {
+    disposed = true;
+    if (fullscreenTimer) clearTimeout(fullscreenTimer);
     for (const [event, callback] of listeners) tg.offEvent(event, callback);
     for (const edge of edges) style.removeProperty(`--tg-content-safe-${edge}`);
   };
