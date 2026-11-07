@@ -66,11 +66,11 @@ export function ChoicePanel({
   }, [left, timerMs, picked]);
 
   return (
-    <div className="animate-sheet-up px-3 pb-3 pt-2">
+    <div className="choice-panel animate-sheet-up px-3 pb-3 pt-2">
       {timerMs ? (
         <div className="mb-2.5 px-1">
           <div className="mb-1.5 flex items-center justify-between">
-            <p className="text-[12.5px] font-semibold uppercase tracking-[0.08em] text-danger/90">{prompt || "Решай быстро"}</p>
+            <p className="text-[14px] font-medium leading-relaxed text-fg">{prompt || "Решай быстро"}</p>
             <span className={`text-[13px] font-bold tabular-nums ${secLeft <= 3 ? "animate-pulse-soft text-danger" : "text-fg/80"}`}>{secLeft}</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
@@ -81,9 +81,9 @@ export function ChoicePanel({
           </div>
         </div>
       ) : (
-        prompt && <p className="mb-2 px-1 text-center text-[12.5px] font-medium uppercase tracking-[0.08em] text-faint">{prompt}</p>
+        prompt && <p className="mb-2 px-1 text-center text-[14px] font-medium leading-relaxed text-muted">{prompt}</p>
       )}
-      <div className="flex flex-col gap-2">
+      <div className="choice-options flex flex-col gap-2">
         {options.map((o, i) => {
           const action = isActionChoice(o.text);
           return (
@@ -94,12 +94,13 @@ export function ChoicePanel({
                 setPicked(o.id);
                 onSelect(o);
               }}
-              className={`group relative w-full overflow-hidden rounded-2xl px-4 py-3.5 text-left text-[15px] leading-snug transition active:scale-[0.98] animate-slide-up ${
+              className={`choice-option group relative w-full overflow-hidden rounded-2xl px-4 py-3.5 text-left text-[15px] leading-snug transition active:scale-[0.98] animate-slide-up ${
                 picked === o.id ? "bg-accent text-white" : "bg-white/[0.06] text-fg ring-1 ring-white/[0.08] hover:bg-white/[0.09]"
               } ${picked !== null && picked !== o.id ? "opacity-40" : ""}`}
               style={{ animationDelay: `${i * 60}ms` }}
             >
-              <span className={action ? "italic text-muted group-disabled:text-inherit" : ""}>{action ? stripAction(o.text) : o.text}</span>
+              <span className="choice-type" aria-hidden="true">{action ? "Действие" : "Ответить"}</span>
+              <span className={action ? "text-muted group-disabled:text-inherit" : ""}>{action ? stripAction(o.text) : o.text}</span>
             </button>
           );
         })}
@@ -124,7 +125,7 @@ export function InputPanel({ prompt, placeholder, onSubmit }: { prompt: string; 
         if (clean) onSubmit(clean);
       }}
     >
-      {prompt && <p className="mb-2 px-1 text-center text-[12.5px] font-medium uppercase tracking-[0.08em] text-faint">{prompt}</p>}
+      {prompt && <p className="mb-2 px-1 text-center text-[14px] font-medium leading-relaxed text-muted">{prompt}</p>}
       <div className="flex items-center gap-2 rounded-full bg-white/[0.07] p-1.5 pl-4 ring-1 ring-white/[0.08] focus-within:ring-accent/60">
         <input
           ref={ref}

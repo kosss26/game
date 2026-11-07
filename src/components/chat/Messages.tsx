@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useState } from "react";
 import type { Character, HistoryEntry } from "@/lib/types/database";
+import { PhotoAttachment } from "./PhotoAttachment";
 import { Avatar, characterColor } from "@/components/ui/Avatar";
 import { Icon, type IconName } from "@/components/ui/Icon";
 
@@ -18,7 +19,7 @@ function time(at: number) {
 // ---------------------------------------------------------------------------
 
 type Attachment =
-  | { kind: "photo"; body: string }
+  | { kind: "photo"; body: string; source?: string }
   | { kind: "voice"; duration: string; body: string }
   | { kind: "geo"; body: string }
   | { kind: "file"; name: string; body: string }
@@ -36,7 +37,7 @@ export function parseAttachment(text: string): Attachment {
   switch (tag.toLowerCase()) {
     case "фото":
     case "photo":
-      return { kind: "photo", body };
+      return { kind: "photo", body, ...(arg ? { source: arg } : {}) };
     case "голосовое":
     case "voice":
       return { kind: "voice", duration: arg || "0:07", body };
@@ -118,23 +119,19 @@ function AttachmentBody({ a, out, fresh, at }: { a: Attachment; out?: boolean; f
   switch (a.kind) {
     case "photo":
       return (
-        <div className="-mx-1.5 -mt-0.5 mb-1">
-          <div className={`flex aspect-[4/3] w-[min(240px,62vw)] flex-col items-center justify-center gap-2 rounded-2xl ${out ? "bg-white/15" : "bg-black/25"} p-4 text-center ring-1 ring-white/5`}>
-            <Icon name="camera" size={26} className={muted} />
-            <span className={`text-[13.5px] italic leading-snug ${out ? "text-white/90" : "text-fg/80"}`}>{a.body}</span>
-          </div>
-        </div>
+        <PhotoAttachment body={a.body} source={a.source} />
       );
     case "voice":
       return (
         <div className="w-[min(250px,64vw)]">
           <div className="flex items-center gap-2.5">
-            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${out ? "bg-white/25" : "bg-accent"} text-white`}>
+            <span aria-hidden="true" className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${out ? "bg-white/25" : "bg-accent"} text-white`}>
               <Icon name="play" size={15} />
             </span>
             <Waveform seed={a.body} light={out} />
             <span className={`text-[12px] tabular-nums ${muted}`}>{a.duration}</span>
           </div>
+          <span className="voice-label">Расшифровка голосового</span>
           {a.body && <p className={`mt-1.5 whitespace-pre-wrap text-[14px] italic leading-snug ${out ? "text-white/90" : "text-fg/85"}`}>{a.body}</p>}
         </div>
       );
@@ -351,7 +348,7 @@ function InBubble({
             {character?.name || characterId}
           </div>
         )}
-        <div className="whitespace-pre-wrap break-words text-[15.5px] leading-[1.38] text-fg">
+        <div className="message-copy whitespace-pre-wrap break-words text-[15.5px] leading-[1.5] text-fg">
           <AttachmentBody a={a} fresh={animate} at={entry.at} />
           {!entry.past && <span className={rich ? "block h-3" : "inline-block w-[42px]"} aria-hidden="true" />}
         </div>
@@ -367,7 +364,7 @@ function OutBubble({ entry, tight, animate }: { entry: HistoryEntry; tight: bool
   return (
     <div className={`flex justify-end ${tight ? "mb-0.5" : "mb-2"} ${animate ? "animate-msg-in" : ""} ${entry.past ? "opacity-75" : ""}`} style={{ transformOrigin: "right bottom" }}>
       <div className="bubble-out relative max-w-[78%] px-3.5 pb-1.5 pt-2">
-        <div className="whitespace-pre-wrap break-words text-[15.5px] leading-[1.38]">
+        <div className="message-copy whitespace-pre-wrap break-words text-[15.5px] leading-[1.5]">
           <AttachmentBody a={a} out fresh={animate} at={entry.at} />
           {!entry.past && <span className={rich ? "block h-3" : "inline-block w-[58px]"} aria-hidden="true" />}
         </div>

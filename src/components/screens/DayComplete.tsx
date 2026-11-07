@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useInviteFriend } from "@/lib/telegram/useInviteFriend";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getChoiceStats, getStoryView, type StoryView } from "@/lib/actions/player";
 import { useApp } from "@/lib/telegram/TelegramProvider";
@@ -38,7 +40,9 @@ interface MadeChoice {
 }
 
 export function DayComplete(p: Props) {
-  const { token, share, haptic } = useApp();
+  const { token, haptic } = useApp();
+  const invitation = useInviteFriend();
+  const router = useRouter();
   const [view, setView] = useState<StoryView | null>(null);
   const [stats, setStats] = useState<Record<string, Record<string, number>> | null>(null);
 
@@ -74,7 +78,7 @@ export function DayComplete(p: Props) {
   const allEndings = Object.entries(p.storyMeta.endings || {});
 
   return (
-    <div className="px-safe pb-safe relative min-h-[100dvh] overflow-hidden bg-ink">
+    <div className="px-safe pb-safe chapter-result relative min-h-[100dvh] overflow-hidden bg-ink">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[46vh] opacity-60">
         <CoverArt style={p.coverStyle} className="h-full w-full" />
         <div className="absolute inset-0 bg-gradient-to-b from-ink/30 via-ink/70 to-ink" />
@@ -96,6 +100,8 @@ export function DayComplete(p: Props) {
             {endingMeta?.description || p.recap}
           </blockquote>
         )}
+
+        {p.isLastDay && <button className="btn-primary mt-6 w-full" onClick={()=>router.push("/")}><Icon name="book" size={18}/>Выбрать следующую историю</button>}
 
         {/* Следующая глава */}
         {!p.isLastDay && (
@@ -127,7 +133,7 @@ export function DayComplete(p: Props) {
 
         {/* Улики */}
         {p.storyMeta.clues && Object.keys(p.storyMeta.clues).length > 0 && p.flags && (
-          <section className="mt-6 card p-5">
+          <details className="result-details mt-4 card p-5"><summary>Найденные улики</summary>
             <h2 className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-faint">
               <Icon name="search" size={16} /> Улики · {foundClues(p.flags, p.storyMeta).length}/{Object.keys(p.storyMeta.clues).length}
             </h2>
@@ -139,12 +145,12 @@ export function DayComplete(p: Props) {
               ))}
             </div>
             {!p.isLastDay && <p className="mt-3 text-[13px] text-muted">Улики переходят в следующие главы. Иногда важнее то, о чём промолчали.</p>}
-          </section>
+          </details>
         )}
 
         {/* Концовки */}
         {p.isLastDay && allEndings.length > 0 && (
-          <section className="mt-6 card p-5">
+          <details className="result-details mt-4 card p-5"><summary>Коллекция концовок</summary>
             <h2 className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-faint">
               <Icon name="trophy" size={16} /> Концовки · {new Set([...(view?.endingsUnlocked || []), ...(p.ending ? [p.ending] : [])]).size}/{allEndings.length}
             </h2>
@@ -162,12 +168,12 @@ export function DayComplete(p: Props) {
               })}
             </ul>
             <p className="mt-3 text-[13px] text-muted">Другие решения ведут к другим финалам. Начните историю заново со страницы истории.</p>
-          </section>
+          </details>
         )}
 
         {/* Статистика выборов */}
         {made.length > 0 && (
-          <section className="mt-6 card p-5">
+          <details className="result-details mt-4 card p-5"><summary>Ваши решения и выборы других</summary>
             <h2 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-faint">Как выбирали другие</h2>
             <div className="mt-4 space-y-5">
               {made.map(m => {
@@ -201,13 +207,14 @@ export function DayComplete(p: Props) {
                 );
               })}
             </div>
-          </section>
+          </details>
         )}
 
         {/* Пригласить друга */}
         {view?.shareLink && !view.isGuest && (
           <button
-            onClick={() => share(view.shareLink, p.storyMeta.share_text || `«${p.storyTitle}» — ${p.storyMeta.tagline || "интерактивная история в Telegram"}`)}
+            disabled={invitation.busy}
+            onClick={() => invitation.invite(view.shareLink)}
             className="mt-6 flex w-full items-center gap-4 rounded-3xl bg-gradient-to-br from-accent/20 to-accent-2/10 p-4 text-left ring-1 ring-accent/25 active:scale-[0.99]"
           >
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent/25 text-accent">
@@ -215,13 +222,13 @@ export function DayComplete(p: Props) {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-semibold text-fg">Позовите друга</span>
-              <span className="block text-[13px] text-muted">За каждого — бесплатный пропуск ожидания</span>
+              <span className="block text-[13px] text-muted">Сравните впечатления от истории</span>
             </span>
             <Icon name="share" className="text-muted" />
           </button>
         )}
 
-        <div className="mt-8 grid grid-cols-2 gap-2">
+        <div className="mt-6 grid grid-cols-2 gap-2">
           <button className="btn-secondary" onClick={p.onReread}>
             <Icon name="book" size={18} /> Переписка
           </button>

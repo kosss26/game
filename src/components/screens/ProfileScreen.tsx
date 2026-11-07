@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { getProfile, type ProfileStory, type ProfileView } from "@/lib/actions/player";
 import { useInviteFriend } from "@/lib/telegram/useInviteFriend";
 import { useApp, useBackButton, type Speed } from "@/lib/telegram/TelegramProvider";
+import { ReadingControls } from "@/components/chat/ReadingControls";
 import { CoverArt } from "@/components/ui/CoverArt";
 import { Icon } from "@/components/ui/Icon";
 import { ErrorState, FullscreenLoader } from "@/components/ui/States";
@@ -51,6 +52,7 @@ export function ProfileScreen() {
         <section className="library-reading" aria-labelledby="reading-heading">
           <h2 id="reading-heading" className="library-section-title">Настройки чтения</h2>
           <div className="library-settings library-panel">
+            <ReadingControls />
             <h3 id="speed-label">Скорость переписки</h3>
             <div className="library-speed" role="group" aria-labelledby="speed-label" aria-describedby="speed-hint">
               {SPEEDS.map(option => <button key={option.id} type="button" aria-pressed={speed === option.id} onClick={() => { haptic("select"); setSpeed(option.id); }} className={speed === option.id ? "is-selected" : ""}>{option.title}</button>)}

@@ -8,6 +8,8 @@ import { useApp, useBackButton, type Speed } from "@/lib/telegram/TelegramProvid
 import { MessageList, TypingBubble, DayDivider, previewText } from "./Messages";
 import { ThreadTabs, ClueSheet, Toast, MeterBar, type ToastData } from "./ChatChrome";
 import { ChoicePanel, InputPanel, PausePanel, IdleComposer } from "./Composer";
+import { Sheet } from "@/components/ui/Sheet";
+import { ReadingControls } from "./ReadingControls";
 import { SaveQueue } from "@/lib/game/save-queue";
 import { Avatar } from "@/components/ui/Avatar";
 import { Icon } from "@/components/ui/Icon";
@@ -610,7 +612,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
         : "Новые сообщения";
 
   return (
-    <div className="chat-bg px-safe relative flex h-[100dvh] flex-col overflow-hidden">
+    <div className="chat-bg play-chat px-safe relative flex h-[100dvh] flex-col overflow-hidden">
       {saveFailed && <div role="alert" className="relative z-30 bg-raised px-4 py-3 text-sm text-fg">Не удалось сохранить прогресс. Проверьте связь. <button className="underline" onClick={() => void queue.flush()}>Повторить</button></div>}
       {/* Шапка */}
       <header className="glass relative z-20 border-b border-white/[0.06] pt-safe">
@@ -689,7 +691,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
       </div>
 
       {/* Нижняя панель */}
-      <div className="glass relative z-20 border-t border-white/[0.06] pb-safe">
+      <div className="chat-composer glass relative z-20 border-t border-white/[0.06] pb-safe">
         {waitingElsewhere ? (
           <div className="px-3 pb-3 pt-2">
             <button onClick={() => openThread(target!)} className="btn-primary w-full">
@@ -755,9 +757,10 @@ function SettingsSheet({
     { id: "instant", title: "Мгновенно", hint: "Без анимаций — для перечитывания" },
   ];
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/55 animate-fade-in" onClick={onClose}>
-      <div className="w-full rounded-t-[28px] bg-raised p-4 pb-safe animate-sheet-up" onClick={e => e.stopPropagation()}>
+    <Sheet label="Настройки чтения" onClose={onClose}>
+      <div className="reading-sheet w-full rounded-t-[28px] bg-raised p-4 pb-safe animate-sheet-up" onClick={e => e.stopPropagation()}>
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/15" />
+        <ReadingControls />
         <p className="mb-3 px-1 text-[13px] font-semibold uppercase tracking-[0.08em] text-faint">Скорость переписки</p>
         <div className="space-y-2">
           {opts.map(o => (
@@ -798,6 +801,6 @@ function SettingsSheet({
         </div>
         <p className="pb-2 text-center text-[12px] text-faint">Прогресс сохраняется автоматически</p>
       </div>
-    </div>
+    </Sheet>
   );
 }

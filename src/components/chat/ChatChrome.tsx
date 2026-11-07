@@ -1,5 +1,6 @@
 "use client";
 
+import { Sheet } from "@/components/ui/Sheet";
 import { useEffect, useRef, useState } from "react";
 import type { Character, ChatConfig, Flags, Meter, StoryMeta } from "@/lib/types/database";
 import { Avatar } from "@/components/ui/Avatar";
@@ -118,7 +119,7 @@ export function ClueSheet({ meta, found, onClose }: { meta?: StoryMeta; found: s
   const got = all.filter(([id]) => found.includes(id));
   const missing = all.length - got.length;
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/55 animate-fade-in" onClick={onClose}>
+    <Sheet label="Найденные улики" onClose={onClose}>
       <div className="max-h-[85dvh] w-full overflow-y-auto rounded-t-[28px] bg-raised p-4 pb-safe animate-sheet-up" onClick={e => e.stopPropagation()}>
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/15" />
         <div className="mb-3 flex items-baseline justify-between px-1">
@@ -148,7 +149,7 @@ export function ClueSheet({ meta, found, onClose }: { meta?: StoryMeta; found: s
           Закрыть
         </button>
       </div>
-    </div>
+    </Sheet>
   );
 }
 

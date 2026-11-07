@@ -18,6 +18,8 @@ export type FlagValue = string | number | boolean;
 export type Flags = Record<string, FlagValue>;
 
 export interface Character {
+  /** Local portrait asset for the character. */
+  avatar?: string;
   name: string;
   /** Hex-цвет имени/аватара */
   color?: string;

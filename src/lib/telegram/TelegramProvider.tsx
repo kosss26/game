@@ -76,6 +76,10 @@ interface AppContextValue {
   authError: boolean;
   retryAuth: () => void;
   haptic: (kind: HapticStyle | "success" | "error" | "warning" | "select") => void;
+  textSize: "normal" | "large" | "larger";
+  setTextSize: (value: "normal" | "large" | "larger") => void;
+  reducedMotion: boolean;
+  setReducedMotion: (value: boolean) => void;
   speed: Speed;
   setSpeed: (s: Speed) => void;
   /** Выборы на время включены */
@@ -146,9 +150,21 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [authError, setAuthError] = useState(false);
   const [speed, setSpeedState] = useState<Speed>("normal");
+  const [textSize, setTextSizeState] = useState<"normal" | "large" | "larger">("normal");
+  const [reducedMotion, setReducedMotionState] = useState(false);
+  const setTextSize = useCallback((value: "normal" | "large" | "larger") => { setTextSizeState(value); safeSet("pl_text_size", value); }, []);
+  const setReducedMotion = useCallback((value: boolean) => { setReducedMotionState(value); safeSet("pl_reduced_motion", value ? "on" : "off"); }, []);
+  useEffect(() => {
+    document.documentElement.dataset.readingSize = textSize;
+    document.documentElement.dataset.reducedMotion = String(reducedMotion);
+  }, [textSize, reducedMotion]);
   const [timers, setTimersState] = useState(true);
 
   useEffect(() => {
+    const size = safeGet("pl_text_size");
+    if (size === "large" || size === "larger") setTextSizeState(size);
+    const motion = safeGet("pl_reduced_motion");
+    setReducedMotionState(motion ? motion === "on" : window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     const s = safeGet(SPEED_KEY);
     if (s === "normal" || s === "fast" || s === "instant") setSpeedState(s);
     if (safeGet(TIMERS_KEY) === "off") setTimersState(false);
@@ -276,6 +292,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
         window.location.reload();
       },
       haptic,
+      textSize, setTextSize, reducedMotion, setReducedMotion,
       speed,
       setSpeed,
       timers,
@@ -284,7 +301,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
       openInvoice,
       share,
     }),
-    [webApp, ready, session, authError, haptic, speed, setSpeed, timers, setTimers, confirm, openInvoice, share]
+    [webApp, ready, session, authError, haptic, textSize, setTextSize, reducedMotion, setReducedMotion, speed, setSpeed, timers, setTimers, confirm, openInvoice, share]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
