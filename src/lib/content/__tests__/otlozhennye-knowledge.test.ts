@@ -16,26 +16,28 @@ function runtime(day: number): Runtime {
   } as SnapshotData);
 }
 
-function walk(rt: Runtime, start: Flags, choose: (step: Extract<Step, {kind:'choice'}>) => string | undefined, tag?: string) {
+function walk(rt: Runtime, start: Flags, choose: (step: Extract<Step, {kind:'choice'}>) => string | undefined, tag?: string, inspect?: (text:string, flags:Flags, chosen:string[])=>void) {
   let pointer = tag ? rt.scenes[rt.indexByTag.get(tag)!].id : rt.firstSceneId;
   let flags = { ...start };
   const messages: string[] = [];
   const prompts: string[] = [];
+  const chosen: string[] = [];
   for (let guard = 0; guard < 1000; guard++) {
     const result = resolve(rt, pointer, flags);
     flags = result.flags;
     const step = result.step;
-    if (step.kind === 'end') return { flags, messages, prompts };
+    if (step.kind === 'end') return { flags, messages, prompts, ending:step.ending, chosen };
     if (step.kind === 'choice') {
       prompts.push(step.prompt || '');
       const target = choose(step);
-      const option = target ? step.options.find(o => o.goto_tag === target) : step.options[0];
+      const option = target ? step.options.find(o => o.goto_tag === target || o.id === target) : step.options[0];
       if (!option) throw new Error(`Missing option: ${target}`);
+      if(option.goto_tag)chosen.push(option.goto_tag);
       ({ pointer, flags } = applyChoice(rt, step.scene.id, option, flags));
     } else if (step.kind === 'input') {
       ({ pointer, flags } = applyInput(rt, step.scene.id, step.key, 'Женя', flags));
     } else {
-      if (step.kind === 'message') messages.push(step.text);
+      if (step.kind === 'message') { messages.push(step.text); inspect?.(step.text,flags,chosen); }
       pointer = nextAfter(rt, step.scene.id);
     }
   }
@@ -44,9 +46,11 @@ function walk(rt: Runtime, start: Flags, choose: (step: Extract<Step, {kind:'cho
 
 const d1 = runtime(1);
 const d2 = runtime(2);
+const d3 = runtime(3);
 const d4 = runtime(4);
 const d5 = runtime(5);
 const d6 = runtime(6);
+const d7 = runtime(7);
 const offer = 'вторым доверенным';
 
 test('the reported hidden-role path never gives Stas private knowledge on the next day', () => {
@@ -117,4 +121,124 @@ test('late disclosure allows a request to see the letter, without inventing know
   expect(result.flags.stas_knows_keeper).toBe(true);
   expect(result.messages.join('\n')).toContain('Ты ведь сможешь прочитать его раньше остальных?');
   expect(result.messages.join('\n')).not.toMatch(/оно же тебе|Ты же видишь всю очередь/);
+});
+
+const chooseTags = (...tags:string[]) => (step:Extract<Step,{kind:'choice'}>) => tags.find(tag=>step.options.some(o=>o.goto_tag===tag));
+
+test('Roman does not reveal the medical diagnosis before the fourth letter', () => {
+  const result=walk(d2,{},()=>undefined,'rp_confess');
+  expect(result.messages.join('\n')).not.toMatch(/рак|поджелудочн/i);
+});
+
+test.each(['l3_family','l3_private','l3_cancel'])('Stas only knows the contents of the third letter when shared: %s', delivery => {
+  const result=walk(d3,{alert:2,t_alla:3},chooseTags(delivery,'at_rest','sp_calm'),'l3_window');
+  expect(result.messages.some(t=>t.includes('Медсестра, судимость, таблетки'))).toBe(delivery==='l3_family');
+});
+
+test.each(['l3f_defend','l3f_silent','l3f_sharp'])('Alla thanks only the actual defense, not another choice: %s', answer => {
+  const result=walk(d3,{t_alla:3},chooseTags('l3_family',answer,'at_rest'),'l3_window');
+  expect(result.messages.some(t=>t.includes('спасибо, что сказал'))).toBe(answer==='l3f_defend');
+  expect(!!result.flags.defended_alla_letter).toBe(answer==='l3f_defend');
+});
+
+test.each(['l3_family','l3_private','l3_cancelled'])('the next-day reaction respects the third letter delivery: %s', delivery => {
+  const result=walk(d4,{[delivery]:true},()=>undefined,'stas_day');
+  expect(result.messages.some(t=>t.includes('после вчерашнего про Аллу'))).toBe(delivery==='l3_family');
+});
+
+test.each(['l2_family','l2_private','l2_cancelled'])('Varya only reproaches a public letter when it was public: %s', delivery => {
+  const result=walk(d4,{[delivery]:true},chooseTags('vm_skip'),'vm_refuse');
+  expect(result.messages.some(t=>t.includes('как папино'))).toBe(delivery==='l2_family');
+});
+
+test('refusing callback and postponing an own message does not contact the investigator', () => {
+  const result=walk(d4,{},chooseTags('ch_end'),'g_wait');
+  expect(result.flags.valiev_known).toBe(true);
+  expect(result.flags.valiev_callback).toBeFalsy();
+  expect(result.flags.police_contact).toBeFalsy();
+  expect(result.messages.join('\n')).not.toMatch(/Ефим Давидович дал ваш номер|Добрый вечер\. Валиев/);
+  expect(result.messages.join('\n')).toContain('Сам я ему ваш не передавал');
+});
+
+test('the player may initiate contact after declining a callback', () => {
+  const result=walk(d4,{},chooseTags('valiev_initiated','v_later'),'g_wait');
+  expect(result.flags.police_contact).toBe(true);
+  expect(result.flags.valiev_callback).toBeFalsy();
+  expect(result.messages.join('\n')).toContain('Гарин дал мне ваш номер');
+  expect(result.messages.join('\n')).not.toContain('Ефим Давидович дал ваш номер');
+});
+
+test('consenting to a callback permits the investigator to initiate contact', () => {
+  const result=walk(d4,{},()=>undefined,'g_valiev');
+  expect(result.flags.valiev_callback).toBe(true);
+  expect(result.messages.join('\n')).toContain('Ефим Давидович дал ваш номер');
+});
+
+test('obtaining a number after the cancelled letter still leaves contact to the player', () => {
+  const result=walk(d4,{clue_pharmacy:true},chooseTags('ch_end'),'gc_ask');
+  expect(result.flags.clue_lab).toBe(true);
+  expect(result.flags.police_contact).toBeFalsy();
+  expect(result.messages.join('\n')).not.toContain('Ефим Давидович дал ваш номер');
+});
+
+test('Varya asks about the recipient before the player explicitly tells her', () => {
+  const result=walk(d5,{},()=>undefined,'n_varya');
+  expect(result.messages.join('\n')).not.toContain('шестое. мне.');
+  expect(result.messages.join('\n')).toContain('кому следующее');
+});
+
+test('the unannounced early visit is acknowledged instead of pretending tomorrow has arrived', () => {
+  const result=walk(d6,{alert:3,stas_knows_keeper:true},chooseTags('st_hot_yes'),'a_end');
+  expect(result.chosen).toContain('st_hot_yes');
+  expect(result.messages.join('\n')).toContain('Вы договаривались на завтра');
+  expect(result.messages.join('\n')).toContain('Ты зачем приехал сегодня?');
+  expect(result.messages.join('\n')).not.toContain('Сегодня — Варино.');
+});
+
+test.each([false,true])('holding new evidence does not transmit it or fabricate an arrest; prior contact: %s', contacted => {
+  const result=walk(d7,{proof:3,clue_log:true,police_contact:contacted},chooseTags('fled_hold'),'fled_end');
+  expect(result.ending).toBe('sbros');
+  expect(result.flags.flight_evidence_sent).toBeFalsy();
+  expect(result.messages.join('\n')).not.toMatch(/достаточно для задержания|задержан на паспортном/);
+});
+
+test.each([false,true])('an explicit evidence handoff precedes acknowledgement; prior contact: %s', contacted => {
+  const result=walk(d7,{proof:3,clue_log:true,clue_corridor:true,police_contact:contacted},chooseTags(contacted?'fled_send_known':'fled_send_via_garin'),'fled_end', (text,flags)=>{
+    if(text.includes('достаточно для задержания'))expect(flags.flight_evidence_sent).toBe(true);
+  });
+  expect(result.flags.police_sent).toBe(true);
+  expect(result.flags.police_contact).toBe(true);
+  expect(result.messages.join('\n')).toContain('Прошу проверить: вот всё');
+  expect(result.ending).toBe('devyat_dney');
+});
+
+test.each([false,true])('the finale remembers the car check only if it happened: %s', checked => {
+  const result=walk(d7,{clue_gps:checked},()=>undefined,'case_strong');
+  expect(result.messages.some(t=>t.includes('Позавчера она проверяла'))).toBe(checked);
+  expect(result.messages.join('\n')).not.toContain('Неделю назад она проверяла');
+});
+
+test('3000 complete routes keep disclosures, consent and evidence reactions consistent', () => {
+  const runtimes=[d1,d2,d3,d4,d5,d6,d7];
+  for(let seed=1;seed<=3000;seed++) {
+    let state=seed>>>0;
+    let flags:Flags={};
+    for(let day=0;day<runtimes.length;day++) {
+      const result=walk(runtimes[day],flags,step=>{
+        state=(state*1664525+1013904223)>>>0;
+        return step.options[Math.floor((state/4294967296)*step.options.length)].id;
+      },undefined,(text,current)=>{
+        let problem='';
+        if(text.includes('Медсестра, судимость, таблетки')&&!current.l3_family)problem='private conviction';
+        if(text.includes('после вчерашнего про Аллу')&&!current.l3_family)problem='private letter reaction';
+        if(text.includes('как папино')&&!current.l2_family)problem='unsent public letter';
+        if(text.includes('спасибо, что сказал')&&!current.defended_alla_letter)problem='unchosen defense';
+        if(text.includes('Ефим Давидович дал ваш номер')&&!current.valiev_callback)problem='unconsented callback';
+        if(text.includes('достаточно для задержания')&&!current.flight_evidence_sent)problem='unsent evidence';
+        if(text.includes('Позавчера она проверяла')&&!current.clue_gps)problem='invented car check';
+        if(problem)throw new Error(`seed ${seed}, chapter ${day+1}: ${problem}`);
+      });
+      flags=result.flags;
+    }
+  }
 });
