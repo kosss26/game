@@ -12,7 +12,8 @@
     "test:watch": "jest --watch",
     "seed": "node --env-file-if-exists=.env.local --import tsx scripts/seed.ts",
     "bot:setup": "node --env-file-if-exists=.env.local --import tsx scripts/bot-setup.ts",
-    "check": "npm run typecheck && npm run lint && npm test",
+    "check": "npm run typecheck && npm run lint && npm test && npm run test:worker",
+    "test:worker": "node --test deploy/cloudflare-relay.test.mjs",
     "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs"
   },
   "dependencies": {

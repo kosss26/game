@@ -4,6 +4,7 @@ import "./globals.css";
 import { TelegramProvider } from "@/lib/telegram/TelegramProvider";
 import { STARTUP_BOOTSTRAP_SRC } from "@/lib/telegram/startup-bootstrap";
 import { StartupRecovery } from "@/components/ui/StartupRecovery";
+import { ErrorReporter } from "@/components/ui/ErrorReporter";
 
 export const metadata: Metadata = {
   title: "Полночь — истории в переписке",
@@ -31,6 +32,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased" style={{ backgroundColor: "#090a0f" }}>
         <StartupRecovery />
+        <ErrorReporter />
         <Script
           src="/vendor/telegram-web-app.124bdff7.js"
           strategy="afterInteractive"

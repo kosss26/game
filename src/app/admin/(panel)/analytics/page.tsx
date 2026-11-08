@@ -1,4 +1,4 @@
-import { getAnalytics } from "@/lib/actions/admin";
+import { getAnalytics, getRecentErrors } from "@/lib/actions/admin";
 import {
   StudioHeading,
   StudioStat,
@@ -6,7 +6,7 @@ import {
 } from "@/components/admin/StudioUI";
 export const dynamic = "force-dynamic";
 export default async function AnalyticsPage() {
-  const a = await getAnalytics();
+  const [a, errors] = await Promise.all([getAnalytics(), getRecentErrors()]);
   return (
     <div className="studio-page">
       <StudioHeading
@@ -88,6 +88,26 @@ export default async function AnalyticsPage() {
           })}
         </div>
       )}
+      <section className="studio-errors" aria-labelledby="errors-heading">
+        <h2 id="errors-heading">Ошибки за сутки</h2>
+        {!errors.length ? (
+          <p className="studio-errors-empty">Ошибок не было. Если что-то сломается у игрока или на сервере, оно появится здесь и придёт оповещением в Telegram.</p>
+        ) : (
+          <ul>
+            {errors.map((e) => (
+              <li key={e.fingerprint}>
+                <span className={`studio-error-source is-${e.source}`}>{e.source === "client" ? "У игрока" : "Сервер"}</span>
+                <strong>{e.message}</strong>
+                <span className="studio-error-meta">
+                  ×{e.count} · последний раз {new Date(e.last_at).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} МСК
+                  {(e.detail?.route || e.detail?.url) ? ` · ${e.detail.route || e.detail.url}` : ""}
+                </span>
+                {e.detail?.stack && <details><summary>Стек</summary><pre>{e.detail.stack}</pre></details>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

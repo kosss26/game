@@ -11,6 +11,12 @@ FROM deps AS tools
 COPY . .
 CMD ["npm", "run", "seed"]
 
+# ---------- проверка: типы, линтер, тесты (hostkey.sh update не выкатит версию, если упало) ----------
+FROM deps AS test
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1 CI=true
+RUN npm run typecheck && npm run lint && npx jest --runInBand && node --test deploy/cloudflare-relay.test.mjs
+
 # ---------- сборка ----------
 FROM deps AS build
 COPY . .

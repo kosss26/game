@@ -1,0 +1,36 @@
+name: Проверка
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Типы, линтер, тесты, сборка
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Типы
+        run: npm run typecheck
+      - name: Линтер
+        run: npm run lint
+      - name: Тесты (включая прохождения всех историй)
+        run: npx jest --runInBand
+      - name: Тесты мониторинга в Cloudflare Worker
+        run: node --test deploy/cloudflare-relay.test.mjs
+      - name: Сборка
+        run: npm run build

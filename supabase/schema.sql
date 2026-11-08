@@ -212,6 +212,20 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 
+-- Журнал ошибок приложения (клиент и сервер). Одинаковые склеиваются по отпечатку.
+CREATE TABLE IF NOT EXISTS error_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source TEXT NOT NULL,
+  fingerprint TEXT NOT NULL UNIQUE,
+  message TEXT NOT NULL,
+  detail JSONB NOT NULL DEFAULT '{}',
+  count INTEGER NOT NULL DEFAULT 1,
+  first_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS error_events_last_at ON error_events (last_at DESC);
+ALTER TABLE error_events ENABLE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS "Anyone can read published stories" ON stories;
 CREATE POLICY "Anyone can read published stories" ON stories
   FOR SELECT USING (status = 'published');

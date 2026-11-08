@@ -35,6 +35,7 @@ const DEFAULTS: Record<string, () => Row> = {
   choice_events: () => ({}),
   purchases: () => ({ story_id: null, day_number: null, stars: 0, source: "stars", telegram_charge_id: null }),
   app_settings: () => ({ value: {}, updated_at: now() }),
+  error_events: () => ({ detail: {}, count: 1, first_at: now(), last_at: now() }),
 };
 
 const UNIQUE: Record<string, string[][]> = {
@@ -47,6 +48,7 @@ const UNIQUE: Record<string, string[][]> = {
   choice_events: [["user_id", "scene_id"]],
   purchases: [["telegram_charge_id"]],
   app_settings: [["key"]],
+  error_events: [["fingerprint"]],
 };
 
 /** Каскадное удаление: таблица → [дочерняя таблица, внешний ключ] */

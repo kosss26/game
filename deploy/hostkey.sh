@@ -16,7 +16,7 @@ MODE=${1:-status}
 die() { printf '\nОШИБКА: %s\n' "$*" >&2; exit 1; }
 say() { printf '\n== %s\n' "$*"; }
 [[ $EUID == 0 ]] || die 'Запустите от root'
-case "$MODE" in init|install|update|bot|status|startup-check|startup-events|renew|relay-config|relay-apply) ;; *) die 'Режимы: init | install | update | bot | status | startup-check | startup-events | renew | relay-config | relay-apply' ;; esac
+case "$MODE" in init|install|update|bot|status|startup-check|startup-events|renew|relay-config|relay-apply|monitor-config|monitor-check) ;; *) die 'Режимы: init | install | update | bot | status | startup-check | startup-events | renew | relay-config | relay-apply | monitor-config | monitor-check' ;; esac
 for cmd in docker git python3 curl openssl flock ss; do command -v "$cmd" >/dev/null || die "Не найдена команда $cmd"; done
 [[ ! -L "$STATE" && ! -L /etc/polnoch-stories && ! -L "$ACME" ]] || die 'Каталоги установки не должны быть символическими ссылками'
 mkdir -p "$STATE" /etc/polnoch-stories
@@ -36,7 +36,7 @@ PY
 compose() {
   local sha
   sha=$(git -C "$ROOT" rev-parse --short=12 HEAD)
-  POLNOCH_ENV_FILE="$ENV" APP_TAG="polnoch-stories:app-$sha" TOOLS_TAG="polnoch-stories:tools-$sha" docker compose --env-file "$ENV" --project-directory "$ROOT" -p "$PROJECT" -f "$ROOT/deploy/hostkey.compose.yml" "$@"
+  POLNOCH_ENV_FILE="$ENV" APP_VERSION="$sha" APP_TAG="polnoch-stories:app-$sha" TOOLS_TAG="polnoch-stories:tools-$sha" docker compose --env-file "$ENV" --project-directory "$ROOT" -p "$PROJECT" -f "$ROOT/deploy/hostkey.compose.yml" "$@"
 }
 ready() {
   [[ -f "$STATE/initialized" && -f "$ENV" && -d "$ROOT/.git" ]] || die 'Сначала выполните init'
@@ -224,6 +224,15 @@ update_app() {
   after=$(git -C "$ROOT" rev-parse HEAD)
   [[ "$before" != "$after" ]] || printf 'Новых изменений нет, пересобираю текущую версию\n'
   compose config --quiet
+  if [[ ${SKIP_TESTS:-0} == 1 ]]; then
+    say 'Проверка пропущена (SKIP_TESTS=1)'
+  else
+    say 'Проверяю новую версию: типы, линтер, тесты (2–4 минуты)'
+    if ! docker build --target test -t polnoch-stories:test "$ROOT"; then
+      git -C "$ROOT" reset --hard --quiet "$before"
+      die "Проверки не прошли — обновление отменено, работает прежняя версия $(git -C "$ROOT" log --oneline -1). Ошибка выше; срочно выкатить без проверок: SKIP_TESTS=1 bash $ROOT/deploy/hostkey.sh update"
+    fi
+  fi
   say 'Собираю новую версию'
   compose build app tools
   say 'Перезапускаю приложение'
@@ -273,7 +282,45 @@ relay_apply() {
   compose run --rm --no-deps tools npm run bot:setup
   printf '\nГотово: исходящие запросы и webhook нового бота используют реле.\n'
 }
+monitor_config() {
+  ready
+  python3 - "$ENV" "$STATE" <<'PYMON'
+import pathlib, secrets, sys, os
+path, state = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+lines = path.read_text().splitlines()
+values = dict(line.split('=', 1) for line in lines if '=' in line and not line.startswith('#'))
+secret = values.get('MONITOR_SECRET') or secrets.token_hex(24)
+if 'MONITOR_SECRET' not in values:
+    tmp = path.with_suffix('.monitor.tmp')
+    tmp.write_text('\n'.join(lines + [f'MONITOR_SECRET={secret}']) + '\n')
+    tmp.chmod(0o600); os.replace(tmp, path)
+url = values['APP_URL'].rstrip('/') + '/api/monitor'
+out = state / 'cloudflare-monitor.txt'
+out.write_text(
+    "Cloudflare → Workers → battleship-relay → Settings → Variables and Secrets\n\n"
+    f"Variables (Text):\nMONITOR_URL={url}\nALERT_CHAT_ID=<ваш chat id — см. deploy/HOSTKEY.md>\n\n"
+    f"Secrets:\nMONITOR_SECRET={secret}\nALERT_BOT_TOKEN=<токен отдельного бота для оповещений>\n\n"
+    "Triggers → Cron Triggers → добавить: */5 * * * *\n"
+    "Необязательно (без повторов и с «восстановлено»): KV namespace с привязкой MONITOR_STATE\n")
+out.chmod(0o600)
+print('Настройки для Cloudflare: /var/lib/polnoch-stories/cloudflare-monitor.txt (права 600).')
+PYMON
+  say 'Перезапускаю приложение с секретом мониторинга'
+  compose up -d --no-build --no-deps --force-recreate app
+  wait_health
+  monitor_check
+}
+monitor_check() {
+  ready
+  local secret
+  secret=$(get_env MONITOR_SECRET)
+  [[ -n "$secret" ]] || die 'Сначала выполните monitor-config'
+  say 'Отчёт мониторинга с этого сервера'
+  curl -fsS --max-time 30 -H "Authorization: Bearer $secret" "http://127.0.0.1:3500/api/monitor?window=60" | python3 -m json.tool
+}
 case "$MODE" in
+  monitor-config) monitor_config ;;
+  monitor-check) monitor_check ;;
   relay-config) relay_config ;;
   relay-apply) relay_apply ;;
   init) init ;;

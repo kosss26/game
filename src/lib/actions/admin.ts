@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth/session";
+import { recentErrors, type ErrorRow } from "@/lib/monitoring/errors";
 import { importDayScript, publishDaySnapshot, buildSnapshot, ScriptError } from "@/lib/content/importer";
 import { isUuid } from "@/lib/game/purchases";
 import type { Story, Day, Scene, Choice, StoryMeta, SnapshotData } from "@/lib/types/database";
@@ -326,4 +327,10 @@ export async function getAnalytics(): Promise<{
     stars: paid.reduce((a, p) => a + (p.stars || 0), 0),
     funnels,
   };
+}
+
+/** Журнал ошибок за последние сутки — для студии */
+export async function getRecentErrors(): Promise<ErrorRow[]> {
+  await requireAdmin();
+  return recentErrors(24 * 60, 30);
 }
