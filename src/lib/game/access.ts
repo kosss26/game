@@ -27,6 +27,8 @@ export interface DayAccess {
   unlocksAt: string | null;
   /** Можно ли пропустить ожидание покупкой */
   skippable: boolean;
+  /** Сколько часов глава ждёт после завершения предыдущей (0 — открывается сразу) */
+  waitHours: number;
 }
 
 export interface AccessInput {
@@ -64,6 +66,7 @@ export function computeAccess(input: AccessInput): DayAccess[] {
       minutes: day.estimated_minutes,
       unlocksAt: null as string | null,
       skippable: false,
+      waitHours: i === 0 || pass || skipped.has(day.day_number) ? 0 : Math.max(0, day.meta?.wait_hours ?? input.defaultWaitHours),
     };
 
     const releaseAt = day.unlock_at ? new Date(day.unlock_at).getTime() : null;

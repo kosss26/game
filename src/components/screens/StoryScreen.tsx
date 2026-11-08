@@ -7,6 +7,7 @@ import { getStoryView, restartStory, type StoryView } from "@/lib/actions/player
 import { useInviteFriend } from "@/lib/telegram/useInviteFriend";
 import { useApp, useBackButton } from "@/lib/telegram/TelegramProvider";
 import type { DayAccess } from "@/lib/game/access";
+import { accessSummary } from "@/lib/game/access-summary";
 import { JournalPanel } from "@/components/journal/JournalPanel";
 import { dismissPhoto } from "@/lib/utils/modal-scroll";
 import { CoverArt } from "@/components/ui/CoverArt";
@@ -52,6 +53,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
   const genre = meta.genre?.split(" · ").pop();
   const synopsis = meta.synopsis || story.description?.split(/\n\s*\n/)[0];
   const onShare = () => invitation.invite(view.shareLink);
+  const accessNote = accessSummary({ ...view, finished });
   const onRestart = async () => {
     if (!(await confirm("Начать историю заново? Прогресс будет сброшен, открытые концовки сохранятся."))) return;
     haptic("warning"); setRestartBusy(true); setRestartError(false);
@@ -96,6 +98,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
       </section>}
       <section className="story-chapters" aria-labelledby="story-chapters-heading">
         <div className="story-section-heading"><h2 id="story-chapters-heading">Главы</h2><span>{completed} из {days.length + view.upcomingDays} пройдено</span></div>
+        {accessNote && <p className="story-access-note"><Icon name="clock" size={16} /><span>{accessNote}</span></p>}
         <ol className="story-chapter-list library-panel">
           {days.map(day => <DayRow key={day.dayId} day={day} storyId={storyId} view={view} unlock={unlock} current={day.dayId === current?.dayId} onReady={load} />)}
           {Array.from({ length: view.upcomingDays }, (_, index) => <li key={`upcoming-${index}`} className="story-chapter-row is-unavailable"><span className="story-chapter-number">{String(days.length + index + 1).padStart(2, "0")}</span><span className="story-chapter-name">Глава {days.length + index + 1}</span><span className="story-chapter-status">Скоро</span></li>)}
@@ -129,7 +132,10 @@ function DayRow({ day, storyId, view, unlock, current, onReady }: { day: DayAcce
     <span className="story-chapter-number">{String(day.dayNumber).padStart(2, "0")}</span>
     <span className="story-chapter-name">Глава {day.dayNumber}<span className="sr-only"> · {day.title}</span>{day.status === "waiting" && day.unlocksAt && <span className="story-chapter-wait">Через <Countdown until={day.unlocksAt} compact onDone={onReady} /></span>}{day.status === "not_released" && <span className="story-chapter-wait">{day.unlocksAt ? `Выход ${new Date(day.unlocksAt).toLocaleDateString("ru-RU")}` : "Скоро"}</span>}</span>
     {current && <span className="story-chapter-status"><i />{day.status === "in_progress" ? "Продолжить" : "Начать"}</span>}
-    {day.status === "completed" ? <Icon name="check" size={18} className="story-chapter-check" /> : <Icon name="chevron" size={20} />}
+    {day.status === "completed" ? <Icon name="check" size={18} className="story-chapter-check" />
+      : day.status === "locked" ? <Icon name="lock" size={16} className="story-chapter-lock" />
+      : day.status === "waiting" ? <Icon name="clock" size={17} className="story-chapter-lock" />
+      : <Icon name="chevron" size={20} />}
   </>;
   return <li className={current ? "is-current" : ""}>
     {playable ? <Link href={`/play/${storyId}/${day.dayNumber}`} className="story-chapter-row" aria-current={current ? "step" : undefined}>{body}</Link> : <div className="story-chapter-row is-unavailable" aria-label={`Глава ${day.dayNumber}: ${day.status === "locked" ? "откроется после предыдущей главы" : "пока недоступна"}`}>{body}</div>}

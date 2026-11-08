@@ -6,6 +6,7 @@ import { applyChoice, applyInput, buildRuntime, isActionChoice, nextAfter, resol
 import { saveProgress, recordChoice, completeDay } from "@/lib/actions/player";
 import { useApp, useBackButton, type Speed } from "@/lib/telegram/TelegramProvider";
 import { MessageList, TypingBubble, DayDivider, previewText } from "./Messages";
+import { storyClocks } from "@/lib/game/story-clock";
 import { ThreadTabs, ClueSheet, Toast, MeterBar, type ToastData } from "./ChatChrome";
 import { ChoicePanel, InputPanel, PausePanel, IdleComposer } from "./Composer";
 import { readingStampKey, RECAP_AFTER_MS } from "@/lib/game/journal";
@@ -593,6 +594,8 @@ export function ChatPlayer(props: ChatPlayerProps) {
     [log, threaded, view]
   );
   const visibleLog = useMemo(() => threadLog.filter(e => !e.hidden), [threadLog]);
+  // Время на пузырях — время истории, а не часы устройства
+  const clocks = useMemo(() => storyClocks(log), [log]);
   const visibleAnimateFrom = useMemo(() => {
     const cut = new Set(log.slice(0, animateFrom.current).map(e => e));
     return visibleLog.filter(e => cut.has(e)).length;
@@ -707,6 +710,7 @@ export function ChatPlayer(props: ChatPlayerProps) {
           multiParty={viewMultiParty}
           defaultCharacter={threaded && !isGroup ? chat?.character || defaultCharacter : defaultCharacter}
           animateFrom={visibleAnimateFrom}
+          clocks={clocks}
         />
         {typingHere && ui.kind === "typing" && <TypingBubble characterId={ui.who} character={allCharacters[ui.who]} multiParty={viewMultiParty} />}
         {ui.kind === "ended" && (

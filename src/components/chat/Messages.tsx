@@ -114,7 +114,7 @@ function Waveform({ seed, light }: { seed: string; light?: boolean }) {
   );
 }
 
-function AttachmentBody({ a, out, fresh, at }: { a: Attachment; out?: boolean; fresh: boolean; at: number }) {
+function AttachmentBody({ a, out, fresh, at, clock }: { a: Attachment; out?: boolean; fresh: boolean; at: number; clock?: string | null }) {
   const muted = out ? "text-white/75" : "text-muted";
   switch (a.kind) {
     case "photo":
@@ -172,13 +172,13 @@ function AttachmentBody({ a, out, fresh, at }: { a: Attachment; out?: boolean; f
           <p className={`mb-0.5 flex items-center gap-1 text-[12.5px] font-medium ${out ? "text-white/80" : "text-accent"}`}>
             <Icon name="forward" size={12} /> Переслано{a.from ? ` от ${a.from}` : ""}
           </p>
-          <AttachmentBody a={parseAttachment(a.body)} out={out} fresh={fresh} at={at} />
+          <AttachmentBody a={parseAttachment(a.body)} out={out} fresh={fresh} at={at} clock={clock} />
         </div>
       );
     case "deleted":
       return <Deleted body={a.body} fresh={fresh} at={at} />;
     case "cam":
-      return <CamFrame label={a.label} body={a.body} at={at} />;
+      return <CamFrame label={a.label} body={a.body} at={at} clock={clock} />;
     case "call":
       return (
         <div className="w-[min(250px,64vw)]">
@@ -232,9 +232,13 @@ function isRich(a: Attachment) {
 }
 
 /** Кадр камеры видеонаблюдения */
-function CamFrame({ label, body, at }: { label: string; body: string; at: number }) {
+function CamFrame({ label, body, at, clock }: { label: string; body: string; at: number; clock?: string | null }) {
   const d = new Date(at);
-  const ts = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+  const seconds = String(d.getSeconds()).padStart(2, "0");
+  // На камере — время истории (если оно известно), секунды — для живости кадра
+  const ts = clock !== undefined
+    ? clock ? `${clock}:${seconds}` : null
+    : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${seconds}`;
   return (
     <div className="-mx-1.5 -mt-0.5 mb-1 w-[min(260px,66vw)] overflow-hidden rounded-xl ring-1 ring-white/10">
       <div
@@ -249,7 +253,7 @@ function CamFrame({ label, body, at }: { label: string; body: string; at: number
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 animate-pulse-soft rounded-full bg-danger" /> REC · {label}
           </span>
-          <span className="tabular-nums">{ts}</span>
+          {ts && <span className="tabular-nums">{ts}</span>}
         </div>
         <p className="whitespace-pre-wrap">{body}</p>
       </div>
@@ -267,9 +271,11 @@ interface Props {
   defaultCharacter: string;
   /** Анимировать только новые сообщения */
   animateFrom: number;
+  /** Время истории для записей (см. storyClocks). Без него — часы устройства */
+  clocks?: WeakMap<HistoryEntry, string | null>;
 }
 
-export const MessageList = memo(function MessageList({ entries, characters, multiParty, defaultCharacter, animateFrom }: Props) {
+export const MessageList = memo(function MessageList({ entries, characters, multiParty, defaultCharacter, animateFrom, clocks }: Props) {
   return (
     <>
       {entries.map((e, i) => {
@@ -284,7 +290,7 @@ export const MessageList = memo(function MessageList({ entries, characters, mult
           return <SystemLine key={e.id + i} text={e.text} animate={animate} past={!!e.past} />;
         }
         if (e.speaker === "me") {
-          return <OutBubble key={e.id + i} entry={e} tight={!!sameAsNext} animate={animate} />;
+          return <OutBubble key={e.id + i} entry={e} tight={!!sameAsNext} animate={animate} clock={clocks ? clocks.get(e) ?? null : undefined} />;
         }
         return (
           <InBubble
@@ -297,6 +303,7 @@ export const MessageList = memo(function MessageList({ entries, characters, mult
             reserveAvatar={multiParty}
             tight={!!sameAsNext}
             animate={animate}
+            clock={clocks ? clocks.get(e) ?? null : undefined}
           />
         );
       })}
@@ -327,6 +334,7 @@ function InBubble({
   reserveAvatar,
   tight,
   animate,
+  clock,
 }: {
   entry: HistoryEntry;
   characterId: string;
@@ -336,7 +344,10 @@ function InBubble({
   reserveAvatar: boolean;
   tight: boolean;
   animate: boolean;
+  /** undefined — часы устройства; null — время истории ещё не задано */
+  clock?: string | null;
 }) {
+  const stamp = clock === undefined ? time(entry.at) : clock;
   const a = parseAttachment(entry.text);
   const rich = isRich(a);
   return (
@@ -349,28 +360,29 @@ function InBubble({
           </div>
         )}
         <div className="message-copy whitespace-pre-wrap break-words text-[15.5px] leading-[1.5] text-fg">
-          <AttachmentBody a={a} fresh={animate} at={entry.at} />
-          {!entry.past && <span className={rich ? "block h-3" : "inline-block w-[42px]"} aria-hidden="true" />}
+          <AttachmentBody a={a} fresh={animate} at={entry.at} clock={clock} />
+          {!entry.past && stamp && <span className={rich ? "block h-3" : "inline-block w-[42px]"} aria-hidden="true" />}
         </div>
-        {!entry.past && <span className="absolute bottom-1.5 right-3 select-none text-[11px] leading-none text-faint">{time(entry.at)}</span>}
+        {!entry.past && stamp && <span className="absolute bottom-1.5 right-3 select-none text-[11px] leading-none text-faint">{stamp}</span>}
       </div>
     </div>
   );
 }
 
-function OutBubble({ entry, tight, animate }: { entry: HistoryEntry; tight: boolean; animate: boolean }) {
+function OutBubble({ entry, tight, animate, clock }: { entry: HistoryEntry; tight: boolean; animate: boolean; clock?: string | null }) {
+  const stamp = clock === undefined ? time(entry.at) : clock;
   const a = parseAttachment(entry.text);
   const rich = isRich(a);
   return (
     <div className={`flex justify-end ${tight ? "mb-0.5" : "mb-2"} ${animate ? "animate-msg-in" : ""} ${entry.past ? "opacity-75" : ""}`} style={{ transformOrigin: "right bottom" }}>
       <div className="bubble-out relative max-w-[78%] px-3.5 pb-1.5 pt-2">
         <div className="message-copy whitespace-pre-wrap break-words text-[15.5px] leading-[1.5]">
-          <AttachmentBody a={a} out fresh={animate} at={entry.at} />
-          {!entry.past && <span className={rich ? "block h-3" : "inline-block w-[58px]"} aria-hidden="true" />}
+          <AttachmentBody a={a} out fresh={animate} at={entry.at} clock={clock} />
+          {!entry.past && <span className={rich ? "block h-3" : stamp ? "inline-block w-[58px]" : "inline-block w-[20px]"} aria-hidden="true" />}
         </div>
         {!entry.past && (
           <span className="absolute bottom-1.5 right-3 inline-flex select-none items-center gap-0.5 text-[11px] leading-none text-white/70">
-            {time(entry.at)}
+            {stamp}
             <Icon name="checks" size={14} strokeWidth={2.2} />
           </span>
         )}

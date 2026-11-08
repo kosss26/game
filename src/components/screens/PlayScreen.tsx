@@ -7,6 +7,7 @@ import { useApp, useBackButton } from "@/lib/telegram/TelegramProvider";
 import type { ChatConfig, Flags, HistoryEntry } from "@/lib/types/database";
 import { ChatPlayer } from "@/components/chat/ChatPlayer";
 import { MessageList, DayDivider, previewText } from "@/components/chat/Messages";
+import { storyClocks } from "@/lib/game/story-clock";
 import { ThreadTabs } from "@/components/chat/ChatChrome";
 import { FullscreenLoader, ErrorState } from "@/components/ui/States";
 import { Icon } from "@/components/ui/Icon";
@@ -221,7 +222,7 @@ function Reread({
       </header>
       <div className="no-scrollbar flex-1 overflow-y-auto px-3 pb-safe">
         <DayDivider label="Переписка сохранена" />
-        <MessageList entries={visible} characters={{ npc: { name: "Собеседник" }, ...characters }} multiParty={chat ? chat.kind === "group" : ids.size > 1} defaultCharacter={def} animateFrom={Infinity} />
+        <MessageList entries={visible} characters={{ npc: { name: "Собеседник" }, ...characters }} multiParty={chat ? chat.kind === "group" : ids.size > 1} defaultCharacter={def} animateFrom={Infinity} clocks={storyClocks(history)} />
         <div className="h-6" />
       </div>
     </div>

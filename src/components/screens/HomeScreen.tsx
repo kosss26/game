@@ -53,7 +53,11 @@ export function HomeScreen() {
   const user = session?.user && !session.user.is_guest ? session.user : null;
   const items = home?.items || null;
   const resume = items ? continueStory(items) : null;
-  const featured = items?.find(item => item.isNew && item.id !== resume?.id)
+  // Тому, кто ещё ничего не начинал, сверху — бесплатная история: в неё можно войти без оплаты и ожидания
+  const firstVisit = !!items?.length && items.every(item => item.status === "new" || item.status === "coming");
+  const entryFree = firstVisit ? items?.find(item => item.isFree && item.status === "new") : undefined;
+  const featured = entryFree
+    || items?.find(item => item.isNew && item.id !== resume?.id)
     || items?.find(item => item.status === "new" && item.id !== resume?.id)
     || items?.find(item => item.id !== resume?.id) || null;
   const filtering = filter !== "all" || !!genre;
@@ -76,7 +80,7 @@ export function HomeScreen() {
           : <>
             {!filtering && resume && <ResumeCard item={resume} />}
             {!filtering && featured && <section className="library-feature-section" aria-labelledby="featured-heading">
-              <h2 id="featured-heading" className="library-section-title">{featured.isNew ? "Новая история" : "Ваша следующая история"}</h2>
+              <h2 id="featured-heading" className="library-section-title">{featured === entryFree ? "Начните с этой истории" : featured.isNew ? "Новая история" : "Ваша следующая история"}</h2>
               <FeaturedCard item={featured} />
             </section>}
             <section className="library-catalog" aria-label="Фильтры историй">
@@ -141,7 +145,7 @@ function StoryRow({ item }: { item: CatalogItem }) {
   const active = item.status !== "new" && item.status !== "coming";
   return <Link href={`/story/${item.id}`} className="library-story-row library-panel">
     <div className="library-row-cover"><CoverArt style={item.cover_style} thumbnail /></div>
-    <div className="library-row-copy"><h3>{item.title}{item.isFree && <span className="library-free library-free-sm">Бесплатно</span>}</h3><p>{active ? chapterStatus(item) : item.meta.genre || item.meta.tagline || chaptersLabel(item.totalDays)}{item.minutesPerDay ? ` · ≈${item.minutesPerDay} мин/глава` : ""}</p></div>
+    <div className="library-row-copy"><h3>{item.title}{item.isNew && <span className="library-new library-free-sm">Новинка</span>}{item.isFree && <span className="library-free library-free-sm">Бесплатно</span>}</h3><p>{active ? chapterStatus(item) : item.meta.genre || item.meta.tagline || chaptersLabel(item.totalDays)}{item.minutesPerDay ? ` · ≈${item.minutesPerDay} мин/глава` : ""}</p></div>
     <Icon name="chevron" size={20} />
   </Link>;
 }

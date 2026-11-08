@@ -381,6 +381,9 @@ a {
 .story-secondary:disabled, .story-restart:disabled { opacity: .5; }
 .story-pass { margin-top: 20px; padding: 14px; }
 .story-pass p { font-size: 13px; line-height: 1.5; margin: 7px 0 12px; color: #c2b9d0; }
+.story-access-note { display: flex; gap: 8px; align-items: flex-start; margin: 2px 0 10px; color: #c9bedb; font-size: 12.5px; line-height: 1.5; }
+.story-access-note svg { flex-shrink: 0; margin-top: 2px; color: #b08af7; }
+.story-chapter-lock { flex-shrink: 0; color: #8f88a3; }
 .story-help { display: flex; gap: 6px; align-items: center; margin-top: 13px; color: #bfb2d0; font-size: 11px; line-height: 1.5; }
 .story-error { margin-top: 10px; color: #f9a4a4; font-size: 13px; line-height: 1.5; }
 .story-extras { border-top: 1px solid #373442; margin-top: 16px; }

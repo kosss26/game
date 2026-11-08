@@ -86,3 +86,13 @@ describe("computeAccess", () => {
     expect(r.every(canPlay)).toBe(true);
   });
 });
+
+describe("waitHours", () => {
+  test("первая глава и пропуск не ждут, остальные — по своему ожиданию", () => {
+    const days = [day(1), day(2), day(3, { meta: null })];
+    const r = computeAccess({ days, progresses: [], purchases: [], now: NOW, defaultWaitHours: 8 });
+    expect(r.map(d => d.waitHours)).toEqual([0, 12, 8]);
+    const pass = computeAccess({ days, progresses: [], purchases: [{ product: "season_pass", day_number: null }], now: NOW, defaultWaitHours: 8 });
+    expect(pass.map(d => d.waitHours)).toEqual([0, 0, 0]);
+  });
+});

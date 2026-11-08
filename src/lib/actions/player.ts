@@ -1,6 +1,7 @@
 "use server";
 
 import { lastConfirmedRead } from "@/lib/game/journal";
+import { newestStory } from "@/lib/game/newest";
 import { db } from "@/lib/supabase/server";
 import { resolveUser, isUserAdmin } from "@/lib/auth/session";
 import { config } from "@/lib/config";
@@ -220,8 +221,10 @@ async function buildCatalog(user: User | null): Promise<CatalogItem[]> {
       minutesPerDay: mins.length ? Math.round(mins.reduce((a, b) => a + b, 0) / mins.length) : null,
     });
   }
-  // «Новая» — самая свежая по дате создания история, которую игрок ещё не начинал
-  const newest = [...list].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))[0];
+  // «Новая» — самая свежая по дате создания история, которую игрок ещё не начинал.
+  // Истории, залитые одной пачкой (разница меньше 10 минут), различаем по порядку
+  // в каталоге: иначе «новинкой» становится та, что случайно вставилась последней.
+  const newest = newestStory(list);
   const it = newest && items.find(i => i.id === newest.id);
   if (it && it.status === "new") it.isNew = true;
   return items;
