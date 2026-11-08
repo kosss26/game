@@ -146,9 +146,12 @@ test.each(['l3_family','l3_private','l3_cancelled'])('the next-day reaction resp
   expect(result.messages.some(t=>t.includes('после вчерашнего про Аллу'))).toBe(delivery==='l3_family');
 });
 
-test.each(['l2_family','l2_private','l2_cancelled'])('Varya only reproaches a public letter when it was public: %s', delivery => {
-  const result=walk(d4,{[delivery]:true},chooseTags('vm_skip'),'vm_refuse');
-  expect(result.messages.some(t=>t.includes('как папино'))).toBe(delivery==='l2_family');
+describe.each([false, true])('Varya knows who controls delivery: %s', known => {
+  test.each(['l2_family','l2_private','l2_cancelled'])('reproach respects delivery and knowledge: %s', delivery => {
+    const result=walk(d4,{[delivery]:true,varya_knows_keeper:known},chooseTags('vm_skip'),'vm_refuse');
+    expect(result.messages.some(t=>t.includes('как папино'))).toBe(delivery==='l2_family' && known);
+    expect(result.messages.some(t=>t.includes('после папиного письма'))).toBe(delivery==='l2_family' && !known);
+  });
 });
 
 test('refusing callback and postponing an own message does not contact the investigator', () => {
