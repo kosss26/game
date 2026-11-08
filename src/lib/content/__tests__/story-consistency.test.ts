@@ -233,3 +233,40 @@ describe('Белый шум: частные сведения и финалы',()
     expect(r.messages.join('\n')).toContain('Фото и показания передадим');
   });
 });
+
+describe('Аудит: знания игрока и уже увиденное', () => {
+  test.each([false, true])('04:44: про проверку в 09:00 можно сказать Штерну, только если о ней известно: %s', audit => {
+    let texts: string[] = [];
+    runStoryDay('petlya', 5, {
+      tag: 'hall_shtern', flags: { clue_audit: audit },
+      choose: step => {
+        const talk = step.options.filter(o => o.goto_tag === 'talk_shtern');
+        if (talk.length) texts = talk.map(o => o.text);
+        return talk[0]?.id;
+      },
+    });
+    expect(texts).toHaveLength(1);
+    expect(texts[0].includes('09:00')).toBe(audit);
+  });
+
+  test.each([false, true])('04:44: бабушку отправляют за ключом Гурова, только зная о ключе: %s', known => {
+    const r = runStoryDay('petlya', 5, { flags: { clue_gurov_key: known } });
+    expect(r.offered.some(list => list.includes('baba_gurov'))).toBe(known);
+  });
+
+  test.each([false, true])('04:44: без знания о третьем ключе игрок узнаёт о нём из сообщения Штерна: %s', known => {
+    const r = runStoryDay('petlya', 5, { tag: 'c_key', flags: { clue_gurov_key: known } });
+    expect(r.messages.some(t => t.includes('Ключ старика заберёт'))).toBe(!known);
+  });
+
+  test.each([false, true])('04:44: финал «Мост» помнит, погиб ли Даня: %s', died => {
+    const r = runStoryDay('petlya', 5, { tag: 'end_most', flags: { dania_died: died } });
+    expect(r.messages.some(t => t.includes('Даня не отвечает'))).toBe(died);
+    expect(r.messages.some(t => t.includes('Даня уже здесь'))).toBe(!died);
+  });
+
+  test('Северное сияние: уже просмотренную камеру банкетного зала не предлагают снова', () => {
+    const r = runStoryDay('severnoe-siyanie', 2, { tag: 'k_banquet' });
+    expect(r.offered[0]).not.toContain('k_banquet');
+  });
+});

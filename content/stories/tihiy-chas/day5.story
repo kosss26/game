@@ -2,7 +2,7 @@
 @minutes 3
 @wait 12h
 @push Ася: дым. я чувствую дым
-@recap «Спасибо, что не уснул.»
+@recap «Ты не спишь?»
 
 SYS: У Аси на часах 05:33
 IF save_gleb -> basement
