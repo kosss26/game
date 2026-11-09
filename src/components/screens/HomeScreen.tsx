@@ -62,6 +62,9 @@ export function HomeScreen() {
     || items?.find(item => item.id !== resume?.id) || null;
   const filtering = filter !== "all" || !!genre;
   const genres = Array.from(new Set((items || []).map(item => catalogGenre(item.meta.genre)).filter(Boolean))) as string[];
+  // Фильтры появляются, только когда есть что фильтровать: статус — после первой начатой истории, жанр — в большом каталоге.
+  const showStatus = (items || []).some(item => item.status !== "new");
+  const showGenre = (items?.length || 0) > 10 && genres.length > 1;
   const filtered = (items || []).filter(item => (filter === "all" || filter === "new" && item.status === "new" || filter === "active" && ["in_progress", "waiting"].includes(item.status) || filter === "finished" && item.status === "finished") && (!genre || catalogGenre(item.meta.genre) === genre));
   const rest = filtering ? filtered : items?.filter(item => item.id !== featured?.id && item.id !== resume?.id) || [];
 
@@ -83,13 +86,13 @@ export function HomeScreen() {
               <h2 id="featured-heading" className="library-section-title">{featured === entryFree ? "Начните с этой истории" : featured.isNew ? "Новая история" : "Ваша следующая история"}</h2>
               <FeaturedCard item={featured} />
             </section>}
-            <section className="library-catalog" aria-label="Фильтры историй">
-              <div className="catalog-filters" role="group" aria-label="Статус прохождения">
+            {(showStatus || showGenre) && <section className="library-catalog" aria-label="Фильтры историй">
+              {showStatus && <div className="catalog-filters" role="group" aria-label="Статус прохождения">
                 {[["all", "Все"], ["new", "Не начаты"], ["active", "Продолжаю"], ["finished", "Пройдены"]].map(([id, title]) => <button key={id} aria-pressed={filter === id} onClick={() => setFilter(id)}>{title}</button>)}
-              </div>
-              <label className="catalog-genre">Жанр <select value={genre} onChange={event => setGenre(event.target.value)}><option value="">Все жанры</option>{genres.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+              </div>}
+              {showGenre && <label className="catalog-genre">Жанр <select value={genre} onChange={event => setGenre(event.target.value)}><option value="">Все жанры</option>{genres.map(value => <option key={value} value={value}>{value}</option>)}</select></label>}
               {filtering && !rest.length && <p className="library-empty-copy">Таких историй пока нет. <button className="underline" onClick={() => { setFilter("all"); setGenre(""); }}>Сбросить фильтры</button></p>}
-            </section>
+            </section>}
             {rest.length > 0 && <section className="library-catalog" aria-labelledby="catalog-heading">
               <h2 id="catalog-heading" className="library-section-title">{filtering ? "Подходящие истории" : "Все истории"}</h2>
               <div className="library-story-list">{rest.map(item => <StoryRow key={item.id} item={item} />)}</div>
@@ -134,7 +137,7 @@ function FeaturedCard({ item }: { item: CatalogItem }) {
     <div className="library-feature-copy">
       <h3>{item.title}</h3>
       {item.meta.tagline && <p className="library-feature-tagline">{item.meta.tagline}</p>}
-      <p className="library-feature-meta">{chaptersLabel(item.totalDays)}{genre ? ` · ${genre.charAt(0).toUpperCase()}${genre.slice(1)}` : ""}{item.minutesPerDay ? ` · ≈${item.minutesPerDay} мин/глава` : ""}</p>
+      <p className="library-feature-meta">{chaptersLabel(item.totalDays)}{genre ? ` · ${genre.charAt(0).toUpperCase()}${genre.slice(1)}` : ""}{item.minutesPerDay ? ` · ≈${item.minutesPerDay}\u00a0мин/\u2060глава` : ""}</p>
       <span className="library-primary">{label}</span>
       {item.status === "waiting" && item.unlocksAt && <span className="library-feature-wait">Откроется через <Countdown until={item.unlocksAt} compact /></span>}
     </div>
@@ -145,7 +148,7 @@ function StoryRow({ item }: { item: CatalogItem }) {
   const active = item.status !== "new" && item.status !== "coming";
   return <Link href={`/story/${item.id}`} className="library-story-row library-panel">
     <div className="library-row-cover"><CoverArt style={item.cover_style} thumbnail /></div>
-    <div className="library-row-copy"><h3>{item.title}{item.isNew && <span className="library-new library-free-sm">Новинка</span>}{item.isFree && <span className="library-free library-free-sm">Бесплатно</span>}</h3><p>{active ? chapterStatus(item) : item.meta.genre || item.meta.tagline || chaptersLabel(item.totalDays)}{item.minutesPerDay ? ` · ≈${item.minutesPerDay} мин/глава` : ""}</p></div>
+    <div className="library-row-copy"><h3>{item.title}{item.isNew && <span className="library-new library-free-sm">Новинка</span>}{item.isFree && <span className="library-free library-free-sm">Бесплатно</span>}</h3><p>{active ? chapterStatus(item) : item.meta.genre || item.meta.tagline || chaptersLabel(item.totalDays)}{item.minutesPerDay ? ` · ≈${item.minutesPerDay}\u00a0мин/\u2060глава` : ""}</p></div>
     <Icon name="chevron" size={20} />
   </Link>;
 }

@@ -493,10 +493,20 @@ a {
 .reading-size-options { display:flex; gap:6px; }
 .reading-size-options button { flex:1; min-width:0; min-height:44px; padding:8px 5px; font-size:12px; border-radius:12px; background:#ffffff08; border:1px solid #ffffff12; }
 .reading-size-options button[aria-pressed="true"] { background:#8959e830; border-color:#a67be9; }
-.reading-sample { font-size:var(--reading-font); line-height:1.5; color:#bcb6c9; padding:14px 0; }
+.reading-sample { padding:12px 0 14px; }
+.reading-sample small { display:block; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#8f8c9d; margin-bottom:6px; }
+.reading-sample span { display:inline-block; max-width:100%; font-size:var(--reading-font); line-height:1.4; color:#ece8f4; padding:9px 13px; border-radius:16px 16px 16px 5px; background:#ffffff0d; border:1px solid #ffffff12; }
 .reading-motion { display:flex; align-items:center; justify-content:space-between; gap:14px; font-size:14px; }
 .reading-motion small { display:block; color:#a2a0b0; font-size:12px; margin-top:3px; }
-.reading-motion input { width:22px; height:22px; accent-color:#9c72ed; flex-shrink:0; }
+.reading-motion input { appearance:none; -webkit-appearance:none; width:44px; height:25px; flex-shrink:0; position:relative; border-radius:16px; background:#414350; border:1px solid #737080; transition:background .2s; cursor:pointer; }
+.reading-motion input::after { content:''; position:absolute; width:19px; height:19px; left:2px; top:2px; border-radius:50%; background:#fff; box-shadow:0 1px 2px #0004; transition:transform .2s; }
+.reading-motion input:checked { background:linear-gradient(110deg, #a27ef7, #8359ec); border-color:#bca2f5; }
+.reading-motion input:checked::after { transform:translateX(19px); }
+.reading-motion input:focus-visible { outline:2px solid #c5a5ff; outline-offset:2px; }
+.library-settings .reading-controls h3 { font:17px/1.3 var(--library-serif); }
+.library-settings .reading-motion { border-top:1px solid #545363; padding:10px 0 2px; }
+.library-settings .reading-motion > span { font:17px/1.3 var(--library-serif); }
+.library-settings .reading-motion small { font-family:theme("fontFamily.sans"); font-size:11px; line-height:1.4; color:#c3becd; }
 .photo-description { border-left:2px solid #9878c3; padding:8px 12px; max-width:250px; }
 .photo-description > span, .voice-label { display:block; font-size:11px; color:#b9a7cd; margin-bottom:5px; }
 .photo-description p { font-size:var(--reading-font); line-height:1.5; }

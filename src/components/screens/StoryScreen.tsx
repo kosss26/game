@@ -48,6 +48,8 @@ export function StoryScreen({ storyId }: { storyId: string }) {
   const finished = days.length > 0 && completed === days.length && view.upcomingDays === 0;
   const characters = Object.entries(meta.characters || {}).filter(([, character]) => character.bio);
   const endings = Object.entries(meta.endings || {});
+  const timed = days.map(day => day.minutes || 0).filter(Boolean);
+  const minutes = timed.length ? Math.round(timed.reduce((a, b) => a + b, 0) / timed.length) : 0;
   const preview = meta.preview_message;
   const speaker = preview && meta.characters?.[preview.character];
   const genre = meta.genre?.split(" · ").pop();
@@ -80,7 +82,7 @@ export function StoryScreen({ storyId }: { storyId: string }) {
       <div className="story-facts" aria-label="Об истории">
         <span><Icon name="book" size={19} />{chaptersLabel(days.length + view.upcomingDays)}</span>
         {endings.length > 0 && <span><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="12" cy="5" r="3" /><circle cx="4" cy="19" r="3" /><circle cx="20" cy="19" r="3" /><path d="m10.5 7.5-5 9m8-9 5 9M7 19h10" /></svg>{endings.length} {plural(endings.length, "концовка", "концовки", "концовок")}</span>}
-        <span><Icon name="chat" size={21} />История в чате</span>
+        {minutes > 0 && <span><Icon name="clock" size={20} />≈{minutes}{"\u00a0"}мин/{"\u2060"}глава</span>}
       </div>
       {view.storyFree && <section className="story-free library-panel" aria-label="Бесплатная история">
         <span className="story-free-icon"><Icon name="gift" size={22} /></span>
