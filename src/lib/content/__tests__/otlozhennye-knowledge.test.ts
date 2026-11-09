@@ -99,8 +99,12 @@ test('asking Stas whether to send the letter already gives him knowledge that ni
 });
 
 test('telling Stas about the eight o’clock preview records the disclosure', () => {
-  const result = walk(d4, {}, () => undefined, 'stas_day');
+  const result = walk(d4, { l1_sent: true }, () => undefined, 'stas_day');
   expect(result.flags.stas_knows_keeper).toBe(true);
+  // Если семья не видела ни одного письма, Стас о письмах не спрашивает
+  const quiet = walk(d4, {}, () => undefined, 'stas_day');
+  expect(quiet.messages.join('\n')).not.toContain('сегодня письмо будет');
+  expect(quiet.flags.stas_knows_keeper).toBeFalsy();
 });
 
 test.each([false, true])('the chapter-five accusation requires disclosure: %s', known => {
@@ -111,7 +115,7 @@ test.each([false, true])('the chapter-five accusation requires disclosure: %s', 
 test('Stas cannot see the queue or know the last recipient while the role stays hidden', () => {
   const result = walk(d6, {}, step => step.options.some(o => o.goto_tag === 'st_still_hidden') ? 'st_still_hidden' : undefined, 'a_end');
   expect(result.prompts).toContain('Стас всё ещё не знает о вашей роли в «Хранителе».');
-  expect(result.messages.join('\n')).not.toMatch(/Ты ведь сможешь|оно же тебе|Ты же видишь всю очередь/);
+  expect(result.messages.join('\n')).not.toMatch(/ты ведь прочитаешь|оно же тебе|Ты же видишь всю очередь/);
   expect(result.flags.stas_knows_keeper).toBeFalsy();
   expect(result.flags.stas_meet).toBeFalsy();
 });
@@ -119,7 +123,7 @@ test('Stas cannot see the queue or know the last recipient while the role stays 
 test('late disclosure allows a request to see the letter, without inventing knowledge of its recipient', () => {
   const result = walk(d6, {}, step => step.options.some(o => o.goto_tag === 'st_reveal') ? 'st_reveal' : undefined, 'a_end');
   expect(result.flags.stas_knows_keeper).toBe(true);
-  expect(result.messages.join('\n')).toContain('Ты ведь сможешь прочитать его раньше остальных?');
+  expect(result.messages.join('\n')).toContain('ты ведь прочитаешь его раньше остальных?');
   expect(result.messages.join('\n')).not.toMatch(/оно же тебе|Ты же видишь всю очередь/);
 });
 
